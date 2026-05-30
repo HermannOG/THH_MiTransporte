@@ -77,7 +77,7 @@
 
   /* Mapa */
   .map-wrap { margin:10px 16px 0; border-radius:16px; overflow:hidden; border:1px solid var(--border); position:relative; }
-  #mapa { height:300px; width:100%; background:var(--surface2); }
+  #mapa { height:320px; width:100%; background:var(--surface2); }
 
   /* Overlay de carga sobre el mapa */
   .map-loading {
@@ -217,13 +217,15 @@ let markerBus   = null;   // marcador naranja de la buseta
 let markerMi    = null;   // marcador azul de la parada del usuario
 let markersStop = [];     // marcadores verdes de todas las paradas
 
-function initMapa() {
-  if (mapa) return;
-  mapa = L.map('mapa', { zoomControl:true, attributionControl:false });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19
+function initMapa(centrarEn) {
+  if (mapa) { mapa.invalidateSize(); return; }
+  const centro = centrarEn || [10.0, -84.12];
+  mapa = L.map("mapa", { zoomControl:true, attributionControl:true, center: centro, zoom: 14 });
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "u00a9 OpenStreetMap"
   }).addTo(mapa);
-  document.getElementById('map-loading').style.display = 'none';
+  document.getElementById("map-loading").style.display = "none";
 }
 
 function iconBus() {
@@ -296,9 +298,13 @@ function goTo(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0, 0);
-  if (id === 'tracker') {
-    // Inicializar mapa después de que el DOM sea visible
-    setTimeout(() => { initMapa(); mapa?.invalidateSize(); }, 100);
+  if (id === "tracker") {
+    // Centrar mapa en la primera parada de la ruta si existe
+    const centro = G.ruta?.paradas?.[0] ? [G.ruta.paradas[0].lat, G.ruta.paradas[0].lng] : null;
+    setTimeout(() => {
+      initMapa(centro);
+      if (mapa) mapa.invalidateSize();
+    }, 200);
   }
 }
 
