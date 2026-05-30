@@ -34,6 +34,28 @@
   .role-text p  { font-size:13px; color:var(--muted); margin-top:3px; }
   .role-arr { margin-left:auto; color:var(--accent); font-size:22px; }
 
+
+  /* CONFIRMACIÓN DE PARADA */
+  #confirm-screen {
+    align-items:center; justify-content:center; padding:32px 24px;
+    background:radial-gradient(ellipse at 50% 25%,rgba(249,115,22,.1) 0%,transparent 65%),var(--bg);
+  }
+  .confirm-wrap { width:100%; max-width:380px; display:flex; flex-direction:column; align-items:center; gap:0; }
+  .confirm-icon { font-size:56px; margin-bottom:16px; }
+  .confirm-title { font-family:'Syne',sans-serif; font-weight:800; font-size:22px; text-align:center; margin-bottom:6px; }
+  .confirm-sub   { font-size:13px; color:var(--muted); text-align:center; margin-bottom:28px; line-height:1.5; }
+  .confirm-card  {
+    width:100%; background:var(--surface); border:2px solid rgba(249,115,22,.4);
+    border-radius:18px; padding:20px; display:flex; align-items:center; gap:14px; margin-bottom:20px;
+  }
+  .confirm-card-icon { font-size:32px; flex-shrink:0; }
+  .confirm-card-name { font-family:'Syne',sans-serif; font-weight:700; font-size:17px; }
+  .confirm-card-det  { font-size:12px; color:var(--muted); margin-top:3px; }
+  .confirm-btns  { display:flex; flex-direction:column; gap:10px; width:100%; }
+  .confirm-yes   { padding:16px; border-radius:14px; border:none; cursor:pointer; background:var(--accent); color:white; font-family:'Syne',sans-serif; font-size:15px; font-weight:700; }
+  .confirm-other { padding:14px; border-radius:14px; border:1px solid var(--border); cursor:pointer; background:var(--surface); color:var(--muted); font-family:'Syne',sans-serif; font-size:14px; font-weight:600; }
+  .confirm-gps-off { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:14px; padding:14px; font-size:13px; color:var(--muted); text-align:center; margin-bottom:16px; line-height:1.5; }
+
   /* TRACKER */
   #tracker { overflow:hidden; }
 
@@ -97,6 +119,30 @@
   <div class="bottom-note">Tu parada se detecta automáticamente por GPS</div>
 </div>
 
+
+<!-- CONFIRMACIÓN DE PARADA -->
+<div class="screen" id="confirm-screen">
+  <div class="confirm-wrap">
+    <div class="confirm-icon">📍</div>
+    <div class="confirm-title">¿En cuál parada estás?</div>
+    <div class="confirm-sub" id="cs-sub">Detectando tu ubicación…</div>
+    <div class="confirm-gps-off" id="cs-gps-off" style="display:none;">
+      📵 No pudimos detectar tu ubicación.<br>Elige tu parada manualmente.
+    </div>
+    <div class="confirm-card" id="cs-card" style="display:none;">
+      <span class="confirm-card-icon">🏘️</span>
+      <div>
+        <div class="confirm-card-name" id="cs-parada-nombre">—</div>
+        <div class="confirm-card-det"  id="cs-parada-det">—</div>
+      </div>
+    </div>
+    <div class="confirm-btns">
+      <button class="confirm-yes"   id="cs-btn-yes"   onclick="confirmarParada()"   style="display:none;">✅ Sí, estoy aquí</button>
+      <button class="confirm-other" id="cs-btn-other" onclick="elegirOtraParada()">📋 Elegir otra parada</button>
+    </div>
+  </div>
+</div>
+
 <!-- TRACKER -->
 <div class="screen" id="tracker">
   <div class="app-header">
@@ -139,7 +185,7 @@
     </div>
     <div class="map-legend">
       <div class="ml-row"><div class="ml-dot" style="background:#f97316;"></div>Unidad</div>
-      <div class="ml-row"><div class="ml-dot" style="background:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.3);"></div>Tú</div>
+      <div class="ml-row"><div class="ml-dot" style="background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.3);"></div>Tú</div>
       <div class="ml-row"><div class="ml-dot" style="background:#22c55e;"></div>Paradas</div>
       <div class="ml-row"><div class="ml-dot" style="background:#3b82f6;width:14px;height:14px;"></div>Tu parada</div>
     </div>
@@ -150,7 +196,7 @@
 <!-- SHEET parada manual -->
 <div class="parada-sheet-bg" id="parada-sheet-bg" onclick="if(event.target===this)cerrarSelectorParada()">
   <div class="parada-sheet">
-    <div class="ps-title">📍 ¿Cuál es tu parada?</div>
+    <div class="ps-title">📍 ¿En cuál parada estás?</div>
     <div id="ps-lista"></div>
   </div>
 </div>
@@ -197,8 +243,8 @@ function iconParada(esLaMia) {
 
 function iconColaborador() {
   return L.divIcon({
-    html:`<div style="background:#3b82f6;width:16px;height:16px;border-radius:50%;
-      border:3px solid white;box-shadow:0 0 0 5px rgba(59,130,246,.3);"></div>`,
+    html:`<div style="background:#ef4444;width:16px;height:16px;border-radius:50%;
+      border:3px solid white;box-shadow:0 0 0 5px rgba(239,68,68,.3);"></div>`,
     iconSize:[16,16], iconAnchor:[8,8], className:''
   });
 }
@@ -322,14 +368,14 @@ window._selRuta = async function(rutaId) {
   document.getElementById('t-header-title').textContent = G.ruta.nombre;
   document.getElementById('t-header-sub').textContent   = 'Turno ' + turnoLabel(G.turno);
   document.getElementById('t-mi-nombre').textContent    = 'Detectando…';
-  document.getElementById('t-mi-sub').textContent       = 'Tu punto de recogida';
+  document.getElementById('t-mi-sub').textContent       = '¿En cuál parada estás?';
 
   G.sesionId = await dbRegistrarConsulta(rutaId, G.turno);
   limpiarMarcadoresMapa();
-  detectarMiParada();
   if (G.unsubGPS) G.unsubGPS();
   G.unsubGPS = dbOnGPS(gpsData => refreshTracker(gpsData));
-  goTo('tracker');
+  goTo('confirm-screen');
+  detectarMiParadaConConfirmacion();
 };
 
 window.volverInicio = async function() {
@@ -344,20 +390,68 @@ window.addEventListener('beforeunload', () => {
   if (G.sesionId) dbClearConsulta(G.sesionId);
 });
 
-// ─── GPS del colaborador ──────────────────────────────────────────────────────
-function detectarMiParada() {
-  if (!navigator.geolocation) { setMiParada(0, false); return; }
+// ─── GPS del colaborador con confirmación ────────────────────────────────────
+function detectarMiParadaConConfirmacion() {
+  const sub      = document.getElementById('cs-sub');
+  const card     = document.getElementById('cs-card');
+  const gpsOff   = document.getElementById('cs-gps-off');
+  const btnYes   = document.getElementById('cs-btn-yes');
+
+  sub.textContent = 'Detectando tu ubicación…';
+  card.style.display = 'none'; btnYes.style.display = 'none';
+  gpsOff.style.display = 'none';
+
+  if (!navigator.geolocation) {
+    gpsOff.style.display = 'block';
+    sub.textContent = '';
+    return;
+  }
+
   navigator.geolocation.getCurrentPosition(
     pos => {
       _latColaborador = pos.coords.latitude;
       _lngColaborador = pos.coords.longitude;
       const idx = paradaMasCercana(_latColaborador, _lngColaborador, G.ruta.paradas);
-      setMiParada(idx, true);
-      actualizarMarcadorColaborador();
+      const p   = G.ruta.paradas[idx];
+      G._paradaSugerida = idx;
+
+      document.getElementById('cs-parada-nombre').textContent = p.nombre;
+      document.getElementById('cs-parada-det').textContent    = p.detalle;
+      sub.textContent        = 'Detectamos que estás cerca de:';
+      card.style.display     = 'flex';
+      btnYes.style.display   = 'block';
+      gpsOff.style.display   = 'none';
     },
-    () => setMiParada(0, false)
+    () => {
+      gpsOff.style.display = 'block';
+      sub.textContent      = '';
+      btnYes.style.display = 'none';
+      card.style.display   = 'none';
+    }
   );
 }
+
+window.confirmarParada = function() {
+  setMiParada(G._paradaSugerida ?? 0, true);
+  goTo('tracker');
+};
+
+window.elegirOtraParada = function() {
+  // Mostrar sheet de selección encima de la pantalla confirm
+  if (!G.ruta) return;
+  document.getElementById('ps-lista').innerHTML = G.ruta.paradas.map((p, i) => `
+    <div class="ps-item" onclick="window._elegirParadaDesdeConfirm(${i})">
+      <div class="ps-num">${i + 1}</div>
+      <div><div class="ps-name">${p.nombre}</div><div class="ps-det">${p.detalle}</div></div>
+    </div>`).join('');
+  document.getElementById('parada-sheet-bg').classList.add('open');
+};
+
+window._elegirParadaDesdeConfirm = function(idx) {
+  document.getElementById('parada-sheet-bg').classList.remove('open');
+  setMiParada(idx, false);
+  goTo('tracker');
+};
 
 function setMiParada(idx, porGPS) {
   G.miParada = idx;
