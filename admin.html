@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>BusetaTrack — Admin</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   body { max-width:800px; margin:0 auto; }
   /* ── LOGIN ── */
@@ -366,6 +367,7 @@ function refreshGPS() {
         <div style="margin-top:10px;">${stopsHtml}</div>
         <div class="ulc-coords">${g.lat.toFixed(4)}° N, ${Math.abs(g.lng).toFixed(4)}° W</div>
         <div class="ulc-ts">Actualizado ${sinceStr}</div>
+        <button onclick="verMapaUnidad('${u.id}')" style="margin-top:10px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(249,115,22,.3);background:rgba(249,115,22,.08);color:var(--accent);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver mapa</button>
       </div>`;
   }).join('');
 }
@@ -579,6 +581,88 @@ window.abrirModal  = id => document.getElementById(id).classList.add('open');
 window.cerrarModal = id => document.getElementById(id).classList.remove('open');
 
 init();
+
+
+// ─── MAPA ADMIN ──────────────────────────────────────────────────────────────
+let _adminMapa = null;
+let _adminMarkers = [];
+
+function iconBusAdmin() {
+  return L.divIcon({
+    html:`<div style="background:#f97316;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);">🚌</div>`,
+    iconSize:[36,36], iconAnchor:[18,18], className:''
+  });
+}
+
+function iconStopAdmin(pasada) {
+  const color = pasada ? '#374151' : '#22c55e';
+  const size  = pasada ? 8 : 10;
+  return L.divIcon({
+    html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid white;opacity:${pasada?'.5':'1'};"></div>`,
+    iconSize:[size,size], iconAnchor:[size/2,size/2], className:''
+  });
+}
+
+window.verMapaUnidad = function(unitId) {
+  const u    = dbGetUnidades()[unitId];
+  const g    = _gps[unitId];
+  const ruta = g ? dbGetRutas()[g.ruta] : (u ? dbGetRutas()[u.ruta] : null);
+  if (!g && !ruta) return;
+
+  document.getElementById('modal-mapa-title').textContent = (u?.nombre || unitId) + ' · ' + (ruta?.nombre || '');
+  document.getElementById('modal-mapa-bg').classList.add('open');
+
+  setTimeout(() => {
+    // Inicializar mapa si es primera vez
+    if (!_adminMapa) {
+      _adminMapa = L.map('admin-mapa', { zoomControl:true, attributionControl:true });
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom:19, attribution:'© OpenStreetMap'
+      }).addTo(_adminMapa);
+    }
+
+    // Limpiar marcadores anteriores
+    _adminMarkers.forEach(m => _adminMapa.removeLayer(m));
+    _adminMarkers = [];
+
+    const bounds = [];
+    const curStop = g?.stopIdx ?? 0;
+
+    // Paradas
+    if (ruta?.paradas?.length) {
+      ruta.paradas.forEach((p, i) => {
+        const pasada = i < curStop;
+        const actual = i === curStop;
+        const m = L.marker([p.lat, p.lng], { icon: iconStopAdmin(pasada) })
+          .addTo(_adminMapa)
+          .bindPopup(`<b>${actual ? '📍 ' : pasada ? '✓ ' : ''}${p.nombre}</b><br><small>${p.detalle}</small>`);
+        _adminMarkers.push(m);
+        bounds.push([p.lat, p.lng]);
+        if (actual) m.openPopup();
+      });
+    }
+
+    // Marcador de la unidad
+    if (g?.lat && g?.lng) {
+      const mBus = L.marker([g.lat, g.lng], { icon: iconBusAdmin(), zIndexOffset:1000 })
+        .addTo(_adminMapa)
+        .bindPopup(`<b>🚌 ${u?.nombre || unitId}</b><br>Placa: ${u?.placa || '—'}<br>Parada: ${ruta?.paradas?.[curStop]?.nombre || curStop}`);
+      _adminMarkers.push(mBus);
+      bounds.push([g.lat, g.lng]);
+    }
+
+    // Zoom
+    if (bounds.length) {
+      _adminMapa.fitBounds(L.latLngBounds(bounds), { padding:[30,30], maxZoom:15 });
+    }
+    _adminMapa.invalidateSize();
+  }, 150);
+};
+
+window.cerrarMapaAdmin = function() {
+  document.getElementById('modal-mapa-bg').classList.remove('open');
+};
+
 </script>
 
 <script>
@@ -623,5 +707,24 @@ init();
   }
 })();
 </script>
+
+<!-- MODAL MAPA ADMIN -->
+<div class="modal-mapa-bg" id="modal-mapa-bg" onclick="if(event.target===this)cerrarMapaAdmin()">
+  <div class="modal-mapa">
+    <div class="modal-mapa-header">
+      <span style="font-size:20px;">🗺️</span>
+      <div class="modal-mapa-title" id="modal-mapa-title">Mapa de unidad</div>
+      <button class="modal-mapa-close" onclick="cerrarMapaAdmin()">✕</button>
+    </div>
+    <div id="admin-mapa"></div>
+    <div class="modal-mapa-info">
+      <div class="mmi-item"><div class="mmi-dot" style="background:#f97316;"></div>Unidad</div>
+      <div class="mmi-item"><div class="mmi-dot" style="background:#22c55e;"></div>Paradas</div>
+      <div class="mmi-item"><div class="mmi-dot" style="background:#f97316;width:8px;height:8px;opacity:.4;"></div>Ya pasaron</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </body>
 </html>
