@@ -358,10 +358,12 @@ function goTo(id) {
     const centro = G.ruta?.paradas?.[0] ? [G.ruta.paradas[0].lat, G.ruta.paradas[0].lng] : null;
     setTimeout(() => {
       initMapa(centro);
-      // Poner paradas inmediatamente aunque no haya GPS de la unidad
+      // Poner paradas y dibujar unidad con el último GPS conocido
       if (G.ruta?.paradas?.length) ponerParadasEnMapa(G.ruta.paradas, G.miParada);
       actualizarMarcadorColaborador();
-    }, 250);
+      // Redibujar la unidad si ya hay datos GPS cargados
+      if (Object.keys(_lastGps).length) refreshTracker(_lastGps);
+    }, 300);
   }
 }
 
