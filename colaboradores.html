@@ -185,7 +185,8 @@
     <div class="map-legend">
       <div class="ml-row"><div class="ml-dot" style="background:#f97316;"></div>Buseta</div>
       <div class="ml-row"><div class="ml-dot" style="background:#3b82f6;"></div>Tu parada</div>
-      <div class="ml-row"><div class="ml-dot" style="background:#22c55e;box-shadow:0 0 4px #22c55e;"></div>Paradas</div>
+      <div class="ml-row"><div class="ml-dot" style="background:#22c55e;"></div>Paradas</div>
+      <div class="ml-row"><div class="ml-dot" style="background:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.35);"></div>Tú</div>
     </div>
   </div>
 
@@ -260,7 +261,7 @@ function actualizarMapa(busLat, busLng, paradas, miParadaIdx) {
   } else {
     markerBus.setLatLng([busLat, busLng]);
   }
-  markerBus.bindPopup('<b>🚌 Buseta</b>').openPopup();
+  markerBus.bindPopup(`<b>🚌 Unidad ${_placaActual || ''}</b>`).openPopup();
 
   // Marcadores de paradas (solo primera vez)
   if (markersStop.length === 0 && paradas.length) {
@@ -288,9 +289,12 @@ function actualizarMapa(busLat, busLng, paradas, miParadaIdx) {
 }
 
 function limpiarMarcadoresMapa() {
-  if (markerBus)   { mapa?.removeLayer(markerBus);  markerBus = null; }
+  if (markerBus)         { mapa?.removeLayer(markerBus);         markerBus = null; }
+  if (markerColaborador) { mapa?.removeLayer(markerColaborador); markerColaborador = null; }
   markersStop.forEach(m => mapa?.removeLayer(m));
   markersStop = [];
+  _latColaborador = null; _lngColaborador = null;
+  _placaActual = '';
 }
 
 // ─── Navegación ───────────────────────────────────────────────────────────────
@@ -303,7 +307,11 @@ function goTo(id) {
     const centro = G.ruta?.paradas?.[0] ? [G.ruta.paradas[0].lat, G.ruta.paradas[0].lng] : null;
     setTimeout(() => {
       initMapa(centro);
-      if (mapa) mapa.invalidateSize();
+      if (mapa) {
+        mapa.invalidateSize();
+        // Poner paradas inmediatamente aunque no haya GPS de la unidad
+        if (G.ruta?.paradas?.length) ponerParadasEnMapa(G.ruta.paradas, G.miParada);
+      }
     }, 200);
   }
 }
@@ -373,7 +381,9 @@ function detectarMiParada() {
   }
   navigator.geolocation.getCurrentPosition(
     pos => {
-      const idx = paradaMasCercana(pos.coords.latitude, pos.coords.longitude, G.ruta.paradas);
+      _latColaborador = pos.coords.latitude;
+      _lngColaborador = pos.coords.longitude;
+      const idx = paradaMasCercana(_latColaborador, _lngColaborador, G.ruta.paradas);
       setMiParada(idx, true);
     },
     () => setMiParada(0)
@@ -451,11 +461,13 @@ function refreshTracker(gpsAll) {
 
   if (!gpsData) {
     sb.className = 'status-pill sb-off';
-    icon.textContent  = '📡'; title.textContent = 'Buseta sin señal';
+    icon.textContent  = '📡'; title.textContent = 'Unidad sin señal';
     desc.textContent  = 'La unidad aún no inició o no tiene conexión';
     document.getElementById('t-rest').textContent = '—';
     document.getElementById('t-time').textContent = '—';
     document.getElementById('t-pct').textContent  = '0%';
+    // Mostrar paradas en el mapa aunque no haya GPS de la unidad
+    if (mapa) ponerParadasEnMapa(paradas, G.miParada);
     return;
   }
 
@@ -467,31 +479,34 @@ function refreshTracker(gpsAll) {
 
   if (diff === null) {
     sb.className = 'status-pill sb-onway';
-    icon.textContent = '🚌'; title.textContent = 'Buseta en camino';
+    icon.textContent = '🚌'; title.textContent = 'Unidad en camino';
     desc.textContent = 'Detectando tu parada…';
     document.getElementById('t-rest').textContent = '—';
     document.getElementById('t-time').textContent = '—';
   } else if (diff > 0) {
     sb.className = 'status-pill sb-onway';
-    icon.textContent = '🚌'; title.textContent = 'Buseta en camino';
+    icon.textContent = '🚌'; title.textContent = 'Unidad en camino';
     desc.textContent = `${diff} parada${diff > 1 ? 's' : ''} antes de la tuya`;
     document.getElementById('t-rest').textContent = diff;
     document.getElementById('t-time').textContent = '~' + (diff * 4) + 'm';
   } else if (diff === 0) {
     sb.className = 'status-pill sb-here';
-    icon.textContent = '🚨'; title.textContent = '¡La buseta está aquí!';
+    icon.textContent = '🚨'; title.textContent = '¡La unidad está aquí!';
     desc.textContent = 'Dirígete al punto de recogida ahora mismo';
     document.getElementById('t-rest').textContent = '0';
     document.getElementById('t-time').textContent = '¡YA!';
   } else {
     sb.className = 'status-pill sb-passed';
-    icon.textContent = '⚠️'; title.textContent = 'La buseta ya pasó';
+    icon.textContent = '⚠️'; title.textContent = 'La unidad ya pasó';
     desc.textContent = 'Espera el próximo turno o contacta al conductor';
     document.getElementById('t-rest').textContent = '—';
     document.getElementById('t-time').textContent = 'Pasó';
   }
 
-  // Actualizar mapa con posición real de la buseta
+  // Guardar placa de la unidad activa
+  _placaActual = unidad?.placa || '';
+
+  // Actualizar mapa con posición real de la unidad
   if (gpsData.lat && gpsData.lng) {
     actualizarMapa(gpsData.lat, gpsData.lng, paradas, G.miParada);
   }
