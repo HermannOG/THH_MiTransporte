@@ -7,6 +7,38 @@
 <link rel="stylesheet" href="styles.css">
 <style>
   body { max-width:800px; margin:0 auto; }
+  /* ── LOGIN ── */
+  #login-screen {
+    display:none; position:fixed; inset:0; z-index:9999;
+    background:radial-gradient(ellipse at 50% 30%, rgba(168,85,247,.12) 0%, transparent 70%), var(--bg);
+    align-items:center; justify-content:center; flex-direction:column; gap:0;
+  }
+  #login-screen.visible { display:flex; }
+  .login-wrap { display:flex; flex-direction:column; align-items:center; width:100%; max-width:340px; padding:32px 24px; }
+  .login-icon { font-size:52px; margin-bottom:16px; }
+  .login-title { font-family:'Syne',sans-serif; font-weight:800; font-size:24px; margin-bottom:4px; }
+  .login-sub   { font-size:13px; color:var(--muted); margin-bottom:32px; }
+  .login-input-wrap { position:relative; width:100%; margin-bottom:12px; }
+  .login-input {
+    width:100%; padding:16px 48px 16px 18px;
+    border-radius:14px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text);
+    font-family:'DM Sans',sans-serif; font-size:20px; letter-spacing:6px;
+    text-align:center; transition:border-color .2s;
+  }
+  .login-input:focus { outline:none; border-color:var(--purple); }
+  .login-input.error { border-color:var(--red); animation:shake .3s ease; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  .login-btn {
+    width:100%; padding:16px; border-radius:14px; border:none; cursor:pointer;
+    background:var(--purple); color:white;
+    font-family:'Syne',sans-serif; font-size:16px; font-weight:700;
+    transition:all .2s; margin-top:4px;
+  }
+  .login-btn:hover { opacity:.9; transform:translateY(-1px); }
+  .login-error { font-size:13px; color:var(--red); margin-top:10px; min-height:20px; text-align:center; }
+  .login-footer { font-size:11px; color:var(--muted); margin-top:20px; text-align:center; line-height:1.5; }
+
   .admin-header { background:var(--surface); border-bottom:1px solid var(--border); padding:16px 24px; display:flex; align-items:center; gap:12px; position:sticky; top:0; z-index:50; }
   .admin-logo  { font-size:24px; }
   .admin-title { font-family:'Syne',sans-serif; font-weight:800; font-size:18px; }
@@ -100,6 +132,24 @@
 </style>
 </head>
 <body>
+
+
+<!-- ══ LOGIN ══ -->
+<div id="login-screen" class="visible">
+  <div class="login-wrap">
+    <div class="login-icon">⚙️</div>
+    <div class="login-title">BusetaTrack</div>
+    <div class="login-sub">Panel de administración</div>
+    <div class="login-input-wrap">
+      <input class="login-input" id="login-pwd" type="password"
+        placeholder="· · · ·" maxlength="20"
+        onkeydown="if(event.key==='Enter')verificarClave()">
+    </div>
+    <button class="login-btn" onclick="verificarClave()">🔐 Ingresar</button>
+    <div class="login-error" id="login-error"></div>
+    <div class="login-footer">Acceso restringido · Solo administradores</div>
+  </div>
+</div>
 
 <div class="admin-header">
   <span class="admin-logo">⚙️</span>
@@ -529,6 +579,49 @@ window.abrirModal  = id => document.getElementById(id).classList.add('open');
 window.cerrarModal = id => document.getElementById(id).classList.remove('open');
 
 init();
+</script>
+
+<script>
+(function() {
+  const CLAVE    = '1252';
+  const TTL_MS   = 24 * 60 * 60 * 1000; // 24 horas
+
+  function sesionValida() {
+    const ts = localStorage.getItem('bt_admin_ts');
+    return ts && (Date.now() - parseInt(ts)) < TTL_MS;
+  }
+
+  function mostrarAdmin() {
+    document.getElementById('login-screen').classList.remove('visible');
+  }
+
+  function ocultarAdmin() {
+    document.getElementById('login-screen').classList.add('visible');
+    setTimeout(() => document.getElementById('login-pwd')?.focus(), 100);
+  }
+
+  window.verificarClave = function() {
+    const input = document.getElementById('login-pwd');
+    const error = document.getElementById('login-error');
+    if (input.value === CLAVE) {
+      localStorage.setItem('bt_admin_ts', Date.now().toString());
+      error.textContent = '';
+      mostrarAdmin();
+    } else {
+      input.classList.add('error');
+      error.textContent = 'Clave incorrecta. Intenta de nuevo.';
+      input.value = '';
+      setTimeout(() => input.classList.remove('error'), 400);
+    }
+  };
+
+  // Verificar al cargar
+  if (sesionValida()) {
+    mostrarAdmin();
+  } else {
+    ocultarAdmin();
+  }
+})();
 </script>
 </body>
 </html>
