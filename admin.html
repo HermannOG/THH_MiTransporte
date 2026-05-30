@@ -6,6 +6,7 @@
 <title>BusetaTrack — Admin</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
   body { max-width:800px; margin:0 auto; }
   /* ── LOGIN ── */
@@ -130,6 +131,19 @@
   .import-box { background:rgba(249,115,22,.08); border:1px solid rgba(249,115,22,.3); border-radius:14px; padding:16px; margin-bottom:20px; }
   .import-box h4 { font-family:'Syne',sans-serif; font-weight:700; margin-bottom:6px; font-size:14px; color:var(--accent); }
   .import-box p  { font-size:12px; color:var(--muted); margin-bottom:12px; line-height:1.5; }
+  /* ── MODAL MAPA ── */
+  .modal-mapa-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:9998; align-items:center; justify-content:center; padding:16px; }
+  .modal-mapa-bg.open { display:flex; }
+  .modal-mapa { background:var(--surface); border:1px solid var(--border); border-radius:20px; width:100%; max-width:640px; overflow:hidden; animation:slideUp .3s ease; }
+  .modal-mapa-header { display:flex; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px solid var(--border); }
+  .modal-mapa-title  { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; flex:1; }
+  .modal-mapa-close  { background:var(--surface2); border:1px solid var(--border); color:var(--muted); font-size:16px; cursor:pointer; padding:5px 12px; border-radius:8px; }
+  .modal-mapa-close:hover { color:var(--red); border-color:var(--red); }
+  #admin-mapa { height:420px; width:100%; display:block; }
+  .modal-mapa-info { padding:10px 16px; border-top:1px solid var(--border); display:flex; gap:16px; flex-wrap:wrap; }
+  .mmi-item { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
+  .mmi-dot  { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
 </style>
 </head>
 <body>
@@ -725,6 +739,5 @@ window.cerrarMapaAdmin = function() {
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </body>
 </html>
