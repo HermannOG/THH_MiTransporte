@@ -217,6 +217,7 @@ let markerBus        = null;   // 🚌 Unidad (naranja)
 let markerColaborador= null;   // 📍 El colaborador (azul pulsante)
 let markersStop      = [];     // paradas (verde / azul la del usuario)
 let _paradaYaRender  = false;  // para no agregar paradas dos veces
+let _curStopActual   = -1;     // última posición conocida de la unidad
 let _placaActual     = '';
 let _latColaborador  = null;
 let _lngColaborador  = null;
@@ -260,20 +261,47 @@ function initMapa(centro) {
   document.getElementById('map-loading').style.display = 'none';
 }
 
+// ── Íconos de parada según estado ────────────────────────────────────────────
+function iconParadaEstado(esLaMia, pasada, actual) {
+  let color, size;
+  if (esLaMia && pasada)  { color='#ef4444'; size=16; } // mi parada ya pasó → rojo
+  else if (esLaMia)        { color='#3b82f6'; size=16; } // mi parada pendiente → azul
+  else if (actual)         { color='#f97316'; size=12; } // parada actual de la unidad → naranja
+  else if (pasada)         { color='#374151'; size=8;  } // pasada → gris oscuro
+  else                     { color='#22c55e'; size=10; } // pendiente → verde
+  return L.divIcon({
+    html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4);opacity:${pasada && !esLaMia ? '.5' : '1'};"></div>`,
+    iconSize:[size,size], iconAnchor:[size/2,size/2], className:''
+  });
+}
+
 // ── Poner paradas en el mapa (solo una vez por ruta) ─────────────────────────
 function ponerParadasEnMapa(paradas, miIdx) {
   if (!mapa || _paradaYaRender) return;
   _paradaYaRender = true;
   paradas.forEach((p, i) => {
     const esLaMia = i === miIdx;
-    const m = L.marker([p.lat, p.lng], { icon: iconParada(esLaMia) })
+    const m = L.marker([p.lat, p.lng], { icon: iconParadaEstado(esLaMia, false, false) })
       .addTo(mapa)
       .bindPopup(`<b>${esLaMia ? '⭐ ' : ''}${p.nombre}</b><br><small>${p.detalle}</small>`);
     markersStop.push(m);
   });
-  // Zoom para ver todas las paradas
   const bounds = L.latLngBounds(paradas.map(p => [p.lat, p.lng]));
   mapa.fitBounds(bounds, { padding:[30,30], maxZoom:15 });
+}
+
+// ── Actualizar colores de paradas según posición de la unidad ────────────────
+function actualizarEstadoParadas(curStop, miIdx, paradas) {
+  markersStop.forEach((m, i) => {
+    const pasada = i < curStop;
+    const actual = i === curStop;
+    const esLaMia = i === miIdx;
+    m.setIcon(iconParadaEstado(esLaMia, pasada, actual));
+    // Actualizar popup con estado
+    let estado = pasada ? '✓ Ya pasó' : actual ? '📍 Aquí ahora' : '⏳ Pendiente';
+    if (esLaMia) estado += ' — ⭐ Tu parada';
+    m.bindPopup(`<b>${paradas[i].nombre}</b><br><small>${paradas[i].detalle}</small><br><span style="font-size:11px;color:#64748b;">${estado}</span>`);
+  });
 }
 
 // ── Actualizar marcador de la unidad ─────────────────────────────────────────
@@ -299,10 +327,13 @@ function actualizarMarcadorColaborador() {
 }
 
 // ── Actualizar iconos de paradas al cambiar mi parada ────────────────────────
-function actualizarIconosParadas(miIdx) {
+function actualizarIconosParadas(miIdx, curStop) {
   if (!G.ruta) return;
+  const cs = curStop ?? _curStopActual ?? -1;
   markersStop.forEach((m, i) => {
-    m.setIcon(iconParada(i === miIdx));
+    const pasada = i < cs;
+    const actual = i === cs;
+    m.setIcon(iconParadaEstado(i === miIdx, pasada, actual));
   });
 }
 
@@ -458,7 +489,7 @@ function setMiParada(idx, porGPS) {
   const p = G.ruta.paradas[idx];
   document.getElementById('t-mi-nombre').textContent = p.nombre;
   document.getElementById('t-mi-sub').textContent    = porGPS ? '📍 Detectada por GPS' : '📍 ' + p.detalle;
-  actualizarIconosParadas(idx);
+  actualizarIconosParadas(idx, _curStopActual);
   refreshTracker(_lastGps);
 }
 
@@ -524,6 +555,7 @@ function refreshTracker(gpsAll) {
   }
 
   const curStop = Math.max(0, Math.min(gpsData.stopIdx ?? 0, total - 1));
+  _curStopActual = curStop; // guardar para actualizarIconosParadas
   const diff    = G.miParada >= 0 ? G.miParada - curStop : null;
   const pct     = total > 1 ? Math.round((curStop / (total - 1)) * 100) : 0;
 
@@ -540,7 +572,7 @@ function refreshTracker(gpsAll) {
     icon.textContent = '🚌'; title.textContent = 'Unidad en camino';
     desc.textContent = `${diff} parada${diff > 1 ? 's' : ''} antes de la tuya`;
     document.getElementById('t-rest').textContent = diff;
-    document.getElementById('t-time').textContent = '~' + (diff * 4) + 'm';
+    document.getElementById('t-time').textContent = '~' + (diff * 4) + ' min';
   } else if (diff === 0) {
     sb.className = 'status-pill sb-here';
     icon.textContent = '🚨'; title.textContent = '¡La unidad está aquí!';
@@ -559,6 +591,7 @@ function refreshTracker(gpsAll) {
   _placaActual = unidad?.placa || '';
   if (gpsData.lat && gpsData.lng) {
     ponerParadasEnMapa(paradas, G.miParada);
+    actualizarEstadoParadas(curStop, G.miParada, paradas);
     actualizarMarcadorBus(gpsData.lat, gpsData.lng);
     actualizarMarcadorColaborador();
   }
