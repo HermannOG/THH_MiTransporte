@@ -5,10 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Mi Transporte</title>
 <link rel="stylesheet" href="styles.css">
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   body { display:flex; flex-direction:column; align-items:center; }
   .screen { display:none; flex-direction:column; width:100%; max-width:430px; min-height:100vh; background:var(--bg); }
   .screen.active { display:flex; animation:fadeUp .3s ease; }
+
+  /* ── SPLASH ── */
   #splash {
     align-items:center; justify-content:center; gap:0; padding:40px 24px;
     background:radial-gradient(ellipse at 50% 30%,rgba(249,115,22,.12) 0%,transparent 70%),var(--bg);
@@ -34,10 +38,81 @@
   .role-text h3 { font-family:'Syne',sans-serif; font-weight:700; font-size:17px; }
   .role-text p  { font-size:13px; color:var(--muted); margin-top:3px; }
   .role-arr { margin-left:auto; color:var(--accent); font-size:22px; }
+
+  /* ── TRACKER ── */
+  #tracker { overflow:hidden; }
+
+  /* Banner de estado sticky arriba */
+  .status-pill {
+    display:flex; align-items:center; gap:10px;
+    margin:12px 16px 0; padding:14px 16px;
+    border-radius:16px; border:1px solid transparent;
+  }
+  .status-pill.sb-onway  { background:rgba(234,179,8,.1);  border-color:rgba(234,179,8,.3); }
+  .status-pill.sb-here   { background:rgba(249,115,22,.12); border-color:rgba(249,115,22,.4); }
+  .status-pill.sb-passed { background:rgba(239,68,68,.1);  border-color:rgba(239,68,68,.3); }
+  .status-pill.sb-off    { background:rgba(100,116,139,.08); border-color:rgba(100,116,139,.2); }
+  .sp-icon  { font-size:28px; flex-shrink:0; }
+  .sp-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
+  .sp-desc  { font-size:12px; color:var(--muted); margin-top:2px; }
+
+  /* Cards de info compactas */
+  .info-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:10px 16px 0; }
+  .ir-card  { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:10px 12px; text-align:center; }
+  .ir-val   { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; line-height:1; }
+  .ir-lbl   { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-top:4px; }
+
+  /* Mi parada card */
+  .mi-parada-card {
+    margin:10px 16px 0; background:var(--surface2);
+    border:1px solid rgba(59,130,246,.3); border-radius:14px;
+    padding:12px 14px; display:flex; align-items:center; gap:12px;
+  }
+  .mp-icon { font-size:22px; flex-shrink:0; }
+  .mp-info { flex:1; min-width:0; }
+  .mp-nombre { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mp-sub    { font-size:11px; color:var(--muted); margin-top:2px; }
+  .mp-change { background:none; border:1px solid var(--border); color:var(--muted); font-size:11px; padding:4px 10px; border-radius:8px; cursor:pointer; flex-shrink:0; white-space:nowrap; }
+  .mp-change:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* Mapa */
+  .map-wrap { margin:10px 16px 0; border-radius:16px; overflow:hidden; border:1px solid var(--border); position:relative; }
+  #mapa { height:300px; width:100%; background:var(--surface2); }
+
+  /* Overlay de carga sobre el mapa */
+  .map-loading {
+    position:absolute; inset:0; background:var(--surface2);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    font-size:13px; color:var(--muted); z-index:500;
+  }
+  .map-loading .ml-icon { font-size:32px; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* Selector de parada manual (sheet desde abajo) */
+  .parada-sheet-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:1000; }
+  .parada-sheet-bg.open { display:flex; align-items:flex-end; }
+  .parada-sheet { background:var(--surface); border-radius:20px 20px 0 0; width:100%; max-width:430px; margin:0 auto; max-height:70vh; overflow-y:auto; padding:20px; }
+  .ps-title { font-family:'Syne',sans-serif; font-weight:700; font-size:17px; margin-bottom:14px; }
+  .ps-item  { display:flex; align-items:center; gap:12px; padding:12px; border-radius:12px; cursor:pointer; border:1px solid transparent; margin-bottom:6px; }
+  .ps-item:hover, .ps-item.sel { background:var(--surface2); border-color:rgba(249,115,22,.4); }
+  .ps-num   { width:26px; height:26px; border-radius:50%; background:var(--surface3); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--muted); flex-shrink:0; }
+  .ps-name  { font-size:14px; font-weight:500; }
+  .ps-det   { font-size:11px; color:var(--muted); margin-top:2px; }
+
+  /* Leyenda del mapa */
+  .map-legend {
+    position:absolute; bottom:8px; left:8px; z-index:400;
+    background:rgba(10,15,30,.85); border:1px solid var(--border);
+    border-radius:10px; padding:6px 10px; font-size:10px; color:var(--muted);
+    display:flex; flex-direction:column; gap:4px; pointer-events:none;
+  }
+  .ml-row { display:flex; align-items:center; gap:6px; }
+  .ml-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
 </style>
 </head>
 <body>
 
+<!-- ══ SPLASH: selección de ruta ══ -->
 <div class="screen active" id="splash">
   <div class="logo-wrap">
     <div class="logo-ring"><span class="logo-emoji">🚌</span></div>
@@ -51,54 +126,183 @@
   <div class="bottom-note">Tu parada se detecta automáticamente por GPS</div>
 </div>
 
+<!-- ══ TRACKER: mapa + info ══ -->
 <div class="screen" id="tracker">
+
+  <!-- Header -->
   <div class="app-header">
     <button class="back-btn" onclick="volverInicio()">‹</button>
     <div>
       <div class="header-title" id="t-header-title">Ruta</div>
-      <div class="header-sub"   id="t-header-sub">Turno 6:00 AM</div>
+      <div class="header-sub"   id="t-header-sub">—</div>
     </div>
     <div class="live-badge" style="margin-left:auto;"><span class="live-dot"></span>VIVO</div>
   </div>
 
-  <div id="t-status" class="status-banner sb-off">
-    <span class="status-icon" id="t-sb-icon">🔄</span>
-    <div class="status-text">
-      <h4 id="t-sb-title">Conectando…</h4>
-      <p  id="t-sb-desc">Buscando la ubicación de tu buseta</p>
+  <!-- Estado principal -->
+  <div class="status-pill sb-off" id="t-status">
+    <span class="sp-icon" id="t-sp-icon">📡</span>
+    <div>
+      <div class="sp-title" id="t-sp-title">Conectando…</div>
+      <div class="sp-desc"  id="t-sp-desc">Buscando la ubicación de tu buseta</div>
     </div>
   </div>
 
-  <div class="prog-wrap">
-    <div class="prog-bg"><div class="prog-fill" id="t-prog" style="width:0%"></div></div>
-    <div class="prog-labels"><span>Inicio</span><span id="t-prog-pct">0%</span><span>Empresa</span></div>
+  <!-- Info compacta: paradas restantes, tiempo, progreso -->
+  <div class="info-row">
+    <div class="ir-card">
+      <div class="ir-val" id="t-rest">—</div>
+      <div class="ir-lbl">Paradas</div>
+    </div>
+    <div class="ir-card">
+      <div class="ir-val" id="t-time">—</div>
+      <div class="ir-lbl">Est. arribo</div>
+    </div>
+    <div class="ir-card">
+      <div class="ir-val" id="t-pct">0%</div>
+      <div class="ir-lbl">Recorrido</div>
+    </div>
   </div>
 
-  <div class="info-grid">
-    <div class="info-card"><div class="ic-label">Buseta en</div><div class="ic-val" id="t-ic-cur" style="font-size:13px;">—</div><div class="ic-sub" id="t-ic-unidad">—</div></div>
-    <div class="info-card"><div class="ic-label">Tu parada</div><div class="ic-val" id="t-ic-mi"  style="font-size:13px;">Detectando…</div><div class="ic-sub">📍 por GPS</div></div>
-    <div class="info-card"><div class="ic-label">Paradas restantes</div><div class="ic-val" id="t-ic-rest">—</div><div class="ic-sub">hasta la tuya</div></div>
-    <div class="info-card"><div class="ic-label">Tiempo est.</div><div class="ic-val" id="t-ic-time">—</div><div class="ic-sub">aproximado</div></div>
+  <!-- Mi parada -->
+  <div class="mi-parada-card">
+    <span class="mp-icon">⭐</span>
+    <div class="mp-info">
+      <div class="mp-nombre" id="t-mi-nombre">Detectando…</div>
+      <div class="mp-sub"    id="t-mi-sub">Tu punto de recogida</div>
+    </div>
+    <button class="mp-change" onclick="abrirSelectorParada()">Cambiar</button>
   </div>
 
-  <div class="sec" style="padding-top:20px;"><div class="sec-label">Paradas de la ruta</div></div>
-  <div class="paradas-wrap" id="t-paradas"></div>
+  <!-- Mapa Leaflet -->
+  <div class="map-wrap">
+    <div id="mapa"></div>
+    <div class="map-loading" id="map-loading">
+      <div class="ml-icon">🔄</div>
+      <div>Cargando mapa…</div>
+    </div>
+    <!-- Leyenda -->
+    <div class="map-legend">
+      <div class="ml-row"><div class="ml-dot" style="background:#f97316;"></div>Buseta</div>
+      <div class="ml-row"><div class="ml-dot" style="background:#3b82f6;"></div>Tu parada</div>
+      <div class="ml-row"><div class="ml-dot" style="background:#22c55e;box-shadow:0 0 4px #22c55e;"></div>Paradas</div>
+    </div>
+  </div>
+
   <div class="gap"></div>
 </div>
 
+<!-- ══ SHEET: selector manual de parada ══ -->
+<div class="parada-sheet-bg" id="parada-sheet-bg" onclick="if(event.target===this)cerrarSelectorParada()">
+  <div class="parada-sheet">
+    <div class="ps-title">📍 ¿Cuál es tu parada?</div>
+    <div id="ps-lista"></div>
+  </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script type="module">
 import { dbGetRutas, dbGetRuta, dbGetUnidades, dbOnRutas, dbOnUnidades, dbOnGPS,
          paradaMasCercana, detectarTurno, turnoLabel,
          dbRegistrarConsulta, dbClearConsulta } from './db.js';
 
+// ─── Estado global ────────────────────────────────────────────────────────────
 let G = { ruta:null, turno:null, miParada:-1, unsubGPS:null, sesionId:null };
+let _lastGps = {};
 
-function goTo(id) {
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  window.scrollTo(0,0);
+// ─── Mapa ─────────────────────────────────────────────────────────────────────
+let mapa        = null;
+let markerBus   = null;   // marcador naranja de la buseta
+let markerMi    = null;   // marcador azul de la parada del usuario
+let markersStop = [];     // marcadores verdes de todas las paradas
+
+function initMapa() {
+  if (mapa) return;
+  mapa = L.map('mapa', { zoomControl:true, attributionControl:false });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(mapa);
+  document.getElementById('map-loading').style.display = 'none';
 }
 
+function iconBus() {
+  return L.divIcon({
+    html: `<div style="
+      background:#f97316; width:38px; height:38px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:20px; border:3px solid white;
+      box-shadow:0 2px 8px rgba(0,0,0,.5);">🚌</div>`,
+    iconSize:[38,38], iconAnchor:[19,19], className:''
+  });
+}
+
+function iconParada(esLaMia, nombre, idx) {
+  const color = esLaMia ? '#3b82f6' : '#22c55e';
+  const size  = esLaMia ? 16 : 10;
+  return L.divIcon({
+    html: `<div style="
+      background:${color}; width:${size}px; height:${size}px;
+      border-radius:50%; border:2px solid white;
+      box-shadow:0 1px 4px rgba(0,0,0,.4);"></div>`,
+    iconSize:[size,size], iconAnchor:[size/2,size/2], className:''
+  });
+}
+
+function actualizarMapa(busLat, busLng, paradas, miParadaIdx) {
+  if (!mapa) return;
+
+  // Marcador de la buseta
+  if (!markerBus) {
+    markerBus = L.marker([busLat, busLng], { icon: iconBus(), zIndexOffset:1000 }).addTo(mapa);
+  } else {
+    markerBus.setLatLng([busLat, busLng]);
+  }
+  markerBus.bindPopup('<b>🚌 Buseta</b>').openPopup();
+
+  // Marcadores de paradas (solo primera vez)
+  if (markersStop.length === 0 && paradas.length) {
+    paradas.forEach((p, i) => {
+      const esLaMia = i === miParadaIdx;
+      const m = L.marker([p.lat, p.lng], { icon: iconParada(esLaMia, p.nombre, i) })
+        .addTo(mapa)
+        .bindPopup(`<b>${esLaMia ? '⭐ ' : ''}${p.nombre}</b><br><small>${p.detalle}</small>`);
+      if (esLaMia) m.openPopup();
+      markersStop.push(m);
+    });
+
+    // Centrar el mapa para ver la buseta y mi parada
+    const bounds = [];
+    bounds.push([busLat, busLng]);
+    if (paradas[miParadaIdx]) bounds.push([paradas[miParadaIdx].lat, paradas[miParadaIdx].lng]);
+    if (bounds.length) mapa.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+  }
+
+  // Actualizar icono de mi parada si cambió
+  markersStop.forEach((m, i) => {
+    const esLaMia = i === miParadaIdx;
+    m.setIcon(iconParada(esLaMia, paradas[i].nombre, i));
+  });
+}
+
+function limpiarMarcadoresMapa() {
+  if (markerBus)   { mapa?.removeLayer(markerBus);  markerBus = null; }
+  markersStop.forEach(m => mapa?.removeLayer(m));
+  markersStop = [];
+}
+
+// ─── Navegación ───────────────────────────────────────────────────────────────
+function goTo(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+  if (id === 'tracker') {
+    // Inicializar mapa después de que el DOM sea visible
+    setTimeout(() => { initMapa(); mapa?.invalidateSize(); }, 100);
+  }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
 function init() {
   G.turno = detectarTurno();
   dbOnRutas(() => renderRutas());
@@ -106,28 +310,35 @@ function init() {
 }
 
 function renderRutas() {
-  const rutas = Object.values(dbGetRutas()).filter(r=>r.activa);
+  const rutas = Object.values(dbGetRutas()).filter(r => r.activa);
   const list  = document.getElementById('rutas-list');
-  if (!rutas.length) { list.innerHTML='<div class="empty"><div class="empty-icon">🚌</div><p>No hay rutas disponibles</p></div>'; return; }
-  list.innerHTML = rutas.map(r=>`
+  if (!rutas.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">🚌</div><p>No hay rutas disponibles</p></div>';
+    return;
+  }
+  list.innerHTML = rutas.map(r => `
     <div class="role-card" onclick="window._selRuta('${r.id}')">
       <div class="role-icon">🏘️</div>
-      <div class="role-text"><h3>${r.nombre}</h3><p>${r.paradas.length} paradas · ${r.horarios.map(turnoLabel).join(', ')}</p></div>
+      <div class="role-text">
+        <h3>${r.nombre}</h3>
+        <p>${r.paradas.length} paradas · ${r.horarios.map(turnoLabel).join(', ')}</p>
+      </div>
       <span class="role-arr">›</span>
     </div>`).join('');
 }
 
+// ─── Selección de ruta ────────────────────────────────────────────────────────
 window._selRuta = async function(rutaId) {
   G.ruta  = dbGetRuta(rutaId);
   G.turno = detectarTurno();
   if (!G.ruta) return;
 
-  document.getElementById('t-header-title').textContent = 'Ruta ' + G.ruta.nombre;
+  document.getElementById('t-header-title').textContent = G.ruta.nombre;
   document.getElementById('t-header-sub').textContent   = 'Turno ' + turnoLabel(G.turno);
 
-  // Registrar esta consulta activa
   G.sesionId = await dbRegistrarConsulta(rutaId, G.turno);
 
+  limpiarMarcadoresMapa();
   detectarMiParada();
   if (G.unsubGPS) G.unsubGPS();
   G.unsubGPS = dbOnGPS(gpsData => refreshTracker(gpsData));
@@ -135,82 +346,149 @@ window._selRuta = async function(rutaId) {
 };
 
 window.volverInicio = async function() {
-  if (G.unsubGPS) { G.unsubGPS(); G.unsubGPS=null; }
-  if (G.sesionId) { await dbClearConsulta(G.sesionId); G.sesionId=null; }
-  G.ruta = null;
+  if (G.unsubGPS) { G.unsubGPS(); G.unsubGPS = null; }
+  if (G.sesionId) { await dbClearConsulta(G.sesionId); G.sesionId = null; }
+  G.ruta = null; G.miParada = -1;
+  limpiarMarcadoresMapa();
   goTo('splash');
 };
 
-// Limpiar al cerrar la ventana
 window.addEventListener('beforeunload', () => {
   if (G.sesionId) dbClearConsulta(G.sesionId);
 });
 
+// ─── Detectar mi parada por GPS ───────────────────────────────────────────────
 function detectarMiParada() {
-  if (!navigator.geolocation) { G.miParada=2; return; }
+  document.getElementById('t-mi-nombre').textContent = 'Detectando por GPS…';
+  document.getElementById('t-mi-sub').textContent    = 'Tu punto de recogida';
+
+  if (!navigator.geolocation) {
+    setMiParada(0); return;
+  }
   navigator.geolocation.getCurrentPosition(
     pos => {
-      G.miParada = paradaMasCercana(pos.coords.latitude, pos.coords.longitude, G.ruta.paradas);
-      document.getElementById('t-ic-mi').textContent = G.ruta.paradas[G.miParada].nombre;
-      refreshTracker(_lastGps);
+      const idx = paradaMasCercana(pos.coords.latitude, pos.coords.longitude, G.ruta.paradas);
+      setMiParada(idx, true);
     },
-    () => { G.miParada=2; document.getElementById('t-ic-mi').textContent = G.ruta.paradas[2]?.nombre+' (sim)' || '—'; }
+    () => setMiParada(0)
   );
 }
 
-let _lastGps = {};
+function setMiParada(idx, porGPS = false) {
+  G.miParada = idx;
+  const p = G.ruta.paradas[idx];
+  document.getElementById('t-mi-nombre').textContent = p.nombre;
+  document.getElementById('t-mi-sub').textContent    = porGPS ? '📍 Detectada por GPS' : '📍 ' + p.detalle;
+
+  // Actualizar marcador en el mapa
+  markersStop.forEach((m, i) => {
+    m.setIcon(iconParada(i === idx, G.ruta.paradas[i].nombre, i));
+    if (i === idx) m.openPopup();
+  });
+
+  refreshTracker(_lastGps);
+}
+
+// ─── Selector manual de parada ────────────────────────────────────────────────
+window.abrirSelectorParada = function() {
+  if (!G.ruta) return;
+  const lista = document.getElementById('ps-lista');
+  lista.innerHTML = G.ruta.paradas.map((p, i) => `
+    <div class="ps-item ${i === G.miParada ? 'sel' : ''}" onclick="window._elegirParada(${i})">
+      <div class="ps-num">${i + 1}</div>
+      <div>
+        <div class="ps-name">${p.nombre}</div>
+        <div class="ps-det">${p.detalle}</div>
+      </div>
+    </div>`).join('');
+  document.getElementById('parada-sheet-bg').classList.add('open');
+};
+
+window._elegirParada = function(idx) {
+  cerrarSelectorParada();
+  setMiParada(idx, false);
+};
+
+window.cerrarSelectorParada = function() {
+  document.getElementById('parada-sheet-bg').classList.remove('open');
+};
+
+// ─── Refresh del tracker ──────────────────────────────────────────────────────
 function refreshTracker(gpsAll) {
   _lastGps = gpsAll;
   if (!G.ruta) return;
-  const unidades = Object.values(dbGetUnidades()).filter(u=>u.ruta===G.ruta.id && u.activa);
-  const now = Date.now();
-  let gpsData=null, unidad=null;
-  for (const u of unidades) {
-    if (gpsAll[u.id] && (now - gpsAll[u.id].ts < 60000)) { gpsData=gpsAll[u.id]; unidad=u; break; }
-  }
 
-  const paradas=G.ruta.paradas, total=paradas.length;
+  const paradas = G.ruta.paradas, total = paradas.length;
+  const now     = Date.now();
+
+  // Buscar GPS activo para esta ruta
+  const todasUnidades = Object.values(dbGetUnidades()).filter(u => u.activa);
+  let gpsData = null, unidad = null;
+
+  // Por ID de unidad
+  for (const u of todasUnidades.filter(u => u.ruta === G.ruta.id)) {
+    if (gpsAll[u.id] && (now - gpsAll[u.id].ts < 90000)) { gpsData = gpsAll[u.id]; unidad = u; break; }
+  }
+  // Por campo 'ruta' en el documento GPS (Powerfleet bridge)
   if (!gpsData) {
-    document.getElementById('t-status').className='status-banner sb-off';
-    document.getElementById('t-sb-icon').textContent='📡';
-    document.getElementById('t-sb-title').textContent='Buseta sin señal';
-    document.getElementById('t-sb-desc').textContent='La unidad aún no inició la ruta o no tiene conexión';
-    document.getElementById('t-ic-cur').textContent='—'; document.getElementById('t-ic-unidad').textContent='—';
-    document.getElementById('t-ic-rest').textContent='—'; document.getElementById('t-ic-time').textContent='—';
-    document.getElementById('t-prog').style.width='0%'; document.getElementById('t-prog-pct').textContent='0%';
-    renderParadas(-1,paradas); return;
+    for (const [gid, g] of Object.entries(gpsAll)) {
+      if ((now - g.ts < 90000) && g.ruta === G.ruta.id) {
+        gpsData = g; unidad = todasUnidades.find(u => u.id === gid) || null; break;
+      }
+    }
   }
 
-  const curStop=gpsData.stopIdx, diff=G.miParada>=0?G.miParada-curStop:null;
-  const pct=Math.round((curStop/(total-1))*100);
-  document.getElementById('t-ic-unidad').textContent=unidad.nombre;
-  document.getElementById('t-ic-cur').textContent=paradas[curStop]?.nombre||'—';
-  if(G.miParada>=0) document.getElementById('t-ic-mi').textContent=paradas[G.miParada].nombre;
-  document.getElementById('t-prog').style.width=pct+'%';
-  document.getElementById('t-prog-pct').textContent=pct+'%';
+  const sb    = document.getElementById('t-status');
+  const icon  = document.getElementById('t-sp-icon');
+  const title = document.getElementById('t-sp-title');
+  const desc  = document.getElementById('t-sp-desc');
 
-  const sb=document.getElementById('t-status'), icon=document.getElementById('t-sb-icon'),
-        title=document.getElementById('t-sb-title'), desc=document.getElementById('t-sb-desc');
-  if(diff===null){sb.className='status-banner sb-onway';icon.textContent='🚌';title.textContent='Buseta en camino';desc.textContent='Detectando tu parada…';document.getElementById('t-ic-rest').textContent='—';document.getElementById('t-ic-time').textContent='—';}
-  else if(diff>0){sb.className='status-banner sb-onway';icon.textContent='🚌';title.textContent='Buseta en camino';desc.textContent=`Faltan ${diff} parada${diff>1?'s':''} — llega en ~${diff*4} min`;document.getElementById('t-ic-rest').textContent=diff;document.getElementById('t-ic-time').textContent='~'+(diff*4)+' min';}
-  else if(diff===0){sb.className='status-banner sb-here';icon.textContent='🚨';title.textContent='¡La buseta está aquí!';desc.textContent='Dirígete al punto de recogida ahora mismo';document.getElementById('t-ic-rest').textContent='0';document.getElementById('t-ic-time').textContent='¡YA!';}
-  else{sb.className='status-banner sb-passed';icon.textContent='⚠️';title.textContent='La buseta ya pasó';desc.textContent='Contacta al conductor o espera el próximo turno';document.getElementById('t-ic-rest').textContent='—';document.getElementById('t-ic-time').textContent='Pasó';}
-  renderParadas(curStop,paradas);
-}
+  if (!gpsData) {
+    sb.className = 'status-pill sb-off';
+    icon.textContent  = '📡'; title.textContent = 'Buseta sin señal';
+    desc.textContent  = 'La unidad aún no inició o no tiene conexión';
+    document.getElementById('t-rest').textContent = '—';
+    document.getElementById('t-time').textContent = '—';
+    document.getElementById('t-pct').textContent  = '0%';
+    return;
+  }
 
-function renderParadas(curStop,paradas) {
-  document.getElementById('t-paradas').innerHTML=paradas.map((p,i)=>{
-    const passed=curStop>=0&&i<curStop,current=i===curStop,isMe=i===G.miParada;
-    let dotCls=passed?'passed':current?'current':'',badges='';
-    if(passed)badges+='<span class="pbadge pbadge-pass">✓ Pasó</span>';
-    else if(current)badges+='<span class="pbadge pbadge-cur">📍 Aquí ahora</span>';
-    else badges+='<span class="pbadge pbadge-pend">Pendiente</span>';
-    if(isMe)badges+='<span class="pbadge pbadge-me">⭐ Tu parada</span>';
-    return `<div class="parada-item" style="${isMe?'background:rgba(59,130,246,.04);':''}">
-      <div class="stop-dot ${dotCls}"><div class="di"></div></div>
-      <div class="parada-info"><div class="parada-name">${p.nombre}</div><div class="parada-detail">${p.detalle}</div><div class="parada-badges">${badges}</div></div>
-    </div>`;
-  }).join('');
+  const curStop = Math.max(0, Math.min(gpsData.stopIdx ?? 0, total - 1));
+  const diff    = G.miParada >= 0 ? G.miParada - curStop : null;
+  const pct     = total > 1 ? Math.round((curStop / (total - 1)) * 100) : 0;
+
+  document.getElementById('t-pct').textContent = pct + '%';
+
+  if (diff === null) {
+    sb.className = 'status-pill sb-onway';
+    icon.textContent = '🚌'; title.textContent = 'Buseta en camino';
+    desc.textContent = 'Detectando tu parada…';
+    document.getElementById('t-rest').textContent = '—';
+    document.getElementById('t-time').textContent = '—';
+  } else if (diff > 0) {
+    sb.className = 'status-pill sb-onway';
+    icon.textContent = '🚌'; title.textContent = 'Buseta en camino';
+    desc.textContent = `${diff} parada${diff > 1 ? 's' : ''} antes de la tuya`;
+    document.getElementById('t-rest').textContent = diff;
+    document.getElementById('t-time').textContent = '~' + (diff * 4) + 'm';
+  } else if (diff === 0) {
+    sb.className = 'status-pill sb-here';
+    icon.textContent = '🚨'; title.textContent = '¡La buseta está aquí!';
+    desc.textContent = 'Dirígete al punto de recogida ahora mismo';
+    document.getElementById('t-rest').textContent = '0';
+    document.getElementById('t-time').textContent = '¡YA!';
+  } else {
+    sb.className = 'status-pill sb-passed';
+    icon.textContent = '⚠️'; title.textContent = 'La buseta ya pasó';
+    desc.textContent = 'Espera el próximo turno o contacta al conductor';
+    document.getElementById('t-rest').textContent = '—';
+    document.getElementById('t-time').textContent = 'Pasó';
+  }
+
+  // Actualizar mapa con posición real de la buseta
+  if (gpsData.lat && gpsData.lng) {
+    actualizarMapa(gpsData.lat, gpsData.lng, paradas, G.miParada);
+  }
 }
 
 init();
