@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GPS Bridge — BusetaTrack</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap');
+  :root {
+    --bg:#0a0f1e; --surface:#111827; --surface2:#1a2235;
+    --accent:#f97316; --green:#22c55e; --red:#ef4444; --blue:#3b82f6;
+    --text:#f1f5f9; --muted:#64748b; --border:#1e293b;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); max-width:480px; margin:0 auto; min-height:100vh; }
+  .header { background:var(--surface); border-bottom:1px solid var(--border); padding:16px 20px; display:flex; align-items:center; gap:12px; position:sticky; top:0; z-index:10; }
+  .header-title { font-family:'Syne',sans-serif; font-weight:800; font-size:18px; }
+  .badge { margin-left:auto; font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:1px; background:rgba(100,116,139,.15); border:1px solid rgba(100,116,139,.3); color:var(--muted); }
+  .badge.on { background:rgba(34,197,94,.15); border-color:rgba(34,197,94,.3); color:var(--green); }
+  .box { margin:16px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .box h3 { font-family:'Syne',sans-serif; font-size:15px; font-weight:700; margin-bottom:6px; }
+  .box p  { font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:10px; }
+  .label  { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; display:block; }
+  textarea { width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-family:monospace; font-size:11px; resize:vertical; min-height:70px; }
+  textarea:focus { outline:none; border-color:var(--accent); }
+  .unit-card { margin:0 16px 10px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px; }
+  .unit-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+  .dot.ok  { background:var(--green); box-shadow:0 0 6px rgba(34,197,94,.5); animation:blink 1.4s infinite; }
+  .dot.err { background:var(--red); }
+  .unit-name { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
+  .unit-sub  { font-size:12px; color:var(--muted); }
+  .coords { font-family:monospace; font-size:11px; color:var(--accent); margin-top:4px; }
+  .ts     { font-size:11px; color:var(--muted); margin-top:2px; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .btn { display:block; width:calc(100% - 32px); margin:0 16px 10px; padding:15px; border-radius:12px; border:none; cursor:pointer; font-family:'Syne',sans-serif; font-size:15px; font-weight:700; text-align:center; }
+  .btn-primary { background:var(--accent); color:white; }
+  .btn-danger  { background:rgba(239,68,68,.12); color:var(--red); border:1px solid rgba(239,68,68,.25); }
+  .log { margin:0 16px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:12px; max-height:200px; overflow-y:auto; }
+  .log-line { font-family:monospace; font-size:11px; color:var(--muted); margin-bottom:3px; }
+  .log-line.ok   { color:var(--green); }
+  .log-line.err  { color:var(--red); }
+  .log-line.info { color:var(--blue); }
+  .warn { margin:16px; background:rgba(234,179,8,.08); border:1px solid rgba(234,179,8,.25); border-radius:12px; padding:14px; font-size:12px; color:var(--muted); line-height:1.6; }
+  .warn strong { color:#eab308; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span style="font-size:22px;">🛰️</span>
+  <div>
+    <div class="header-title">GPS Bridge</div>
+    <div style="font-size:11px;color:var(--muted);">Powerfleet → Firebase</div>
+  </div>
+  <span class="badge" id="badge">Inactivo</span>
+</div>
+
+<div class="warn">
+  <strong>📌 Instrucciones:</strong> Abre Powerfleet en otra pestaña, presiona F12 → Network → cualquier request → Headers → copia el valor de <strong>_token</strong> y pégalo abajo.
+</div>
+
+<div class="box">
+  <h3>🔑 Token de Powerfleet</h3>
+  <p>El token expira periódicamente. Cuando deje de funcionar, copia uno nuevo desde Powerfleet.</p>
+  <label class="label">_token</label>
+  <textarea id="token" placeholder="Pega aquí el _token..."></textarea>
+  <div style="font-size:11px;color:var(--muted);margin-top:6px;" id="token-info">Sin token</div>
+</div>
+
+<div class="unit-card">
+  <div class="unit-head">
+    <div class="dot" id="dot-62"></div>
+    <div><div class="unit-name">HB4262</div><div class="unit-sub">Ruta San Rafael</div></div>
+  </div>
+  <div class="coords" id="coords-62">Esperando GPS…</div>
+  <div class="ts"     id="ts-62">—</div>
+</div>
+
+<div class="unit-card">
+  <div class="unit-head">
+    <div class="dot" id="dot-63"></div>
+    <div><div class="unit-name">HB4263</div><div class="unit-sub">Ruta Heredia</div></div>
+  </div>
+  <div class="coords" id="coords-63">Esperando GPS…</div>
+  <div class="ts"     id="ts-63">—</div>
+</div>
+
+<button class="btn btn-primary" id="btn-start" onclick="iniciar()">🚀 Iniciar Bridge</button>
+<button class="btn btn-danger"  id="btn-stop"  onclick="detener()" style="display:none;">⏹ Detener Bridge</button>
+
+<div style="font-size:11px;color:var(--muted);padding:0 16px 8px;">Log de actividad</div>
+<div class="log" id="log"><div class="log-line info">Listo. Pega el token e inicia.</div></div>
+<div style="height:20px;"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey:            "AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM",
+  authDomain:        "busetatrack.firebaseapp.com",
+  projectId:         "busetatrack",
+  storageBucket:     "busetatrack.firebasestorage.app",
+  messagingSenderId: "420499514925",
+  appId:             "1:420499514925:web:3da3d96515656389847aa4"
+});
+const db = getFirestore(app);
+
+const PROXY_URL = 'https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment';
+const TENANT_ID = '742';
+const APP_ID    = '10001';
+const INTERVALO = 15000;
+
+const VEHICULOS = {
+  '4273350242566909952': { sufijo:'62', unitId:'U01', ruta:'san-rafael' },
+  '4273350389036195840': { sufijo:'63', unitId:'U02', ruta:'heredia'    },
+};
+
+let _iv       = null;
+
+
+function log(msg, tipo='info') {
+  const box = document.getElementById('log');
+  const hora = new Date().toLocaleTimeString('es-CR');
+  const el   = document.createElement('div');
+  el.className    = 'log-line ' + tipo;
+  el.textContent  = `[${hora}] ${msg}`;
+  box.insertBefore(el, box.firstChild);
+  while (box.children.length > 60) box.removeChild(box.lastChild);
+}
+
+function turno() {
+  const h = new Date().getHours();
+  if (h>=4&&h<10) return '6am'; if (h>=11&&h<15) return '2pm';
+  if (h>=16&&h<20) return '6pm'; return '10pm';
+}
+
+function reqId() { return 'bt' + Math.random().toString(36).slice(2,8); }
+
+// gpsIndex independiente por unidad
+const _gpsIndexPorVehiculo = {};
+
+async function consultarVehiculo(vid, vehic, token) {
+  const gpsIdx = _gpsIndexPorVehiculo[vid] || '0';
+  const url = `https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment?gpsIndex=${gpsIdx}&reqId=${reqId()}&vehicleId=${vid}`;
+  
+  try {
+    const r = await fetch(url, {
+      method: 'GET',
+      headers: {
+        '_token':    token,
+        '_tenantid': TENANT_ID,
+        '_appid':    APP_ID,
+        '_langtype': 'es_ES',
+        'Accept':    'application/json, text/plain, */*',
+      }
+    });
+
+    if (!r.ok) { log(`HB42${vehic.sufijo}: Error HTTP ${r.status}`, 'err'); return; }
+
+    const json = await r.json();
+    if (!json.success || !json.data) return;
+
+    // Actualizar gpsIndex de esta unidad
+    if (json.data.gpsIndex) _gpsIndexPorVehiculo[vid] = json.data.gpsIndex;
+
+    const lista = json.data.gpsList || [];
+    
+    // Si no hay datos nuevos
+    if (!lista.length) {
+      log(`HB42${vehic.sufijo}: sin cambios`, 'info');
+      return;
+    }
+
+    // Filtrar solo los datos de ESTA unidad específica
+    const misDatos = lista.filter(i => String(i.vid) === String(vid));
+    if (!misDatos.length) {
+      log(`HB42${vehic.sufijo}: sin datos propios`, 'info');
+      return;
+    }
+
+    // Tomar el dato más reciente de esta unidad
+    const item = misDatos[misDatos.length - 1];
+    const lat  = item.lat / 1000000;
+    const lng  = item.lng / 1000000;
+
+    if (lat < 8 || lat > 11 || lng < -86 || lng > -82) {
+      log(`HB42${vehic.sufijo}: coords fuera de CR`, 'err');
+      document.getElementById('dot-'+vehic.sufijo).className = 'dot err';
+      return;
+    }
+
+    await setDoc(doc(db, 'gps', vehic.unitId), {
+      lat, lng, stopIdx: 0,
+      estado: 'activo', ruta: vehic.ruta,
+      turno: turno(), fuente: 'powerfleet', ts: Date.now()
+    });
+
+    document.getElementById('dot-'+vehic.sufijo).className      = 'dot ok';
+    document.getElementById('coords-'+vehic.sufijo).textContent = lat.toFixed(5)+'° N, '+Math.abs(lng).toFixed(5)+'° W';
+    document.getElementById('ts-'+vehic.sufijo).textContent     = 'Actualizado: '+new Date().toLocaleTimeString('es-CR');
+    log(`HB42${vehic.sufijo}: ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 'ok');
+
+  } catch(e) {
+    log(`HB42${vehic.sufijo}: ${e.message}`, 'err');
+  }
+}
+
+async function consultar() {
+  const token = document.getElementById('token').value.trim();
+  if (!token) { log('Sin token', 'err'); return; }
+
+  // Consultar ambas unidades en paralelo
+  await Promise.all(
+    Object.entries(VEHICULOS).map(([vid, vehic]) => consultarVehiculo(vid, vehic, token))
+  );
+}
+
+window.iniciar = async function() {
+  const token = document.getElementById('token').value.trim();
+  if (!token || token.length < 50) { alert('Pega el token primero'); return; }
+  localStorage.setItem('bt_pf_token', token);
+  await consultar();
+  _iv = setInterval(consultar, INTERVALO);
+  document.getElementById('btn-start').style.display = 'none';
+  document.getElementById('btn-stop').style.display  = 'block';
+  const b = document.getElementById('badge');
+  b.textContent = 'Activo'; b.className = 'badge on';
+  log('Bridge activo — consultando cada 15s', 'ok');
+};
+
+window.detener = async function() {
+  if (_iv) { clearInterval(_iv); _iv = null; }
+  try { await deleteDoc(doc(db,'gps','U01')); await deleteDoc(doc(db,'gps','U02')); } catch(e){}
+  document.getElementById('btn-start').style.display = 'block';
+  document.getElementById('btn-stop').style.display  = 'none';
+  document.getElementById('badge').textContent = 'Inactivo';
+  document.getElementById('badge').className   = 'badge';
+  ['62','63'].forEach(s => document.getElementById('dot-'+s).className = 'dot');
+  log('Bridge detenido', 'info');
+};
+
+const saved = localStorage.getItem('bt_pf_token');
+if (saved) {
+  document.getElementById('token').value = saved;
+  document.getElementById('token-info').textContent = '✅ Token previo cargado';
+  log('Token previo encontrado', 'info');
+}
+document.getElementById('token').addEventListener('input', e => {
+  const v = e.target.value.trim();
+  document.getElementById('token-info').textContent = v.length > 50
+    ? `✅ Token válido (${v.length} chars)` : '⚠️ Token muy corto';
+});
+</script>
+</body>
+</html>

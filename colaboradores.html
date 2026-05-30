@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Mi Transporte</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { display:flex; flex-direction:column; align-items:center; }
+  .screen { display:none; flex-direction:column; width:100%; max-width:430px; min-height:100vh; background:var(--bg); }
+  .screen.active { display:flex; animation:fadeUp .3s ease; }
+  #splash {
+    align-items:center; justify-content:center; gap:0; padding:40px 24px;
+    background:radial-gradient(ellipse at 50% 30%,rgba(249,115,22,.12) 0%,transparent 70%),var(--bg);
+  }
+  .logo-wrap { display:flex; flex-direction:column; align-items:center; gap:12px; margin-bottom:48px; }
+  .logo-ring {
+    width:96px; height:96px; border-radius:50%;
+    border:2px solid rgba(249,115,22,.6);
+    display:flex; align-items:center; justify-content:center; position:relative;
+  }
+  .logo-ring::before { content:''; position:absolute; inset:-10px; border-radius:50%; border:1px solid rgba(249,115,22,.2); animation:ripple 2.5s infinite; }
+  .logo-ring::after  { content:''; position:absolute; inset:-22px; border-radius:50%; border:1px solid rgba(249,115,22,.1); animation:ripple 2.5s infinite .4s; }
+  @keyframes ripple { 0%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(1.25)} }
+  .logo-emoji { font-size:44px; }
+  .logo-title { font-family:'Syne',sans-serif; font-size:30px; font-weight:800; letter-spacing:-1px; }
+  .logo-sub   { font-size:12px; color:var(--muted); letter-spacing:3px; text-transform:uppercase; }
+  .role-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:2px; margin-bottom:16px; align-self:flex-start; }
+  .role-cards { display:flex; flex-direction:column; gap:12px; width:100%; }
+  .role-card  { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:20px; cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:16px; }
+  .role-card:active { transform:scale(.98); }
+  .role-card:hover  { border-color:rgba(249,115,22,.5); background:var(--surface2); }
+  .role-icon { font-size:32px; width:52px; height:52px; background:var(--surface2); border-radius:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .role-text h3 { font-family:'Syne',sans-serif; font-weight:700; font-size:17px; }
+  .role-text p  { font-size:13px; color:var(--muted); margin-top:3px; }
+  .role-arr { margin-left:auto; color:var(--accent); font-size:22px; }
+</style>
+</head>
+<body>
+
+<div class="screen active" id="splash">
+  <div class="logo-wrap">
+    <div class="logo-ring"><span class="logo-emoji">🚌</span></div>
+    <div class="logo-title">Mi Transporte</div>
+    <div class="logo-sub">Seguimiento en vivo</div>
+  </div>
+  <div class="role-label">Selecciona tu ruta</div>
+  <div class="role-cards" id="rutas-list">
+    <div class="empty"><div class="empty-icon">⏳</div><p>Cargando rutas…</p></div>
+  </div>
+  <div class="bottom-note">Tu parada se detecta automáticamente por GPS</div>
+</div>
+
+<div class="screen" id="tracker">
+  <div class="app-header">
+    <button class="back-btn" onclick="volverInicio()">‹</button>
+    <div>
+      <div class="header-title" id="t-header-title">Ruta</div>
+      <div class="header-sub"   id="t-header-sub">Turno 6:00 AM</div>
+    </div>
+    <div class="live-badge" style="margin-left:auto;"><span class="live-dot"></span>VIVO</div>
+  </div>
+
+  <div id="t-status" class="status-banner sb-off">
+    <span class="status-icon" id="t-sb-icon">🔄</span>
+    <div class="status-text">
+      <h4 id="t-sb-title">Conectando…</h4>
+      <p  id="t-sb-desc">Buscando la ubicación de tu buseta</p>
+    </div>
+  </div>
+
+  <div class="prog-wrap">
+    <div class="prog-bg"><div class="prog-fill" id="t-prog" style="width:0%"></div></div>
+    <div class="prog-labels"><span>Inicio</span><span id="t-prog-pct">0%</span><span>Empresa</span></div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-card"><div class="ic-label">Buseta en</div><div class="ic-val" id="t-ic-cur" style="font-size:13px;">—</div><div class="ic-sub" id="t-ic-unidad">—</div></div>
+    <div class="info-card"><div class="ic-label">Tu parada</div><div class="ic-val" id="t-ic-mi"  style="font-size:13px;">Detectando…</div><div class="ic-sub">📍 por GPS</div></div>
+    <div class="info-card"><div class="ic-label">Paradas restantes</div><div class="ic-val" id="t-ic-rest">—</div><div class="ic-sub">hasta la tuya</div></div>
+    <div class="info-card"><div class="ic-label">Tiempo est.</div><div class="ic-val" id="t-ic-time">—</div><div class="ic-sub">aproximado</div></div>
+  </div>
+
+  <div class="sec" style="padding-top:20px;"><div class="sec-label">Paradas de la ruta</div></div>
+  <div class="paradas-wrap" id="t-paradas"></div>
+  <div class="gap"></div>
+</div>
+
+<script type="module">
+import { dbGetRutas, dbGetRuta, dbGetUnidades, dbOnRutas, dbOnUnidades, dbOnGPS,
+         paradaMasCercana, detectarTurno, turnoLabel,
+         dbRegistrarConsulta, dbClearConsulta } from './db.js';
+
+let G = { ruta:null, turno:null, miParada:-1, unsubGPS:null, sesionId:null };
+
+function goTo(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+function init() {
+  G.turno = detectarTurno();
+  dbOnRutas(() => renderRutas());
+  dbOnUnidades(() => {});
+}
+
+function renderRutas() {
+  const rutas = Object.values(dbGetRutas()).filter(r=>r.activa);
+  const list  = document.getElementById('rutas-list');
+  if (!rutas.length) { list.innerHTML='<div class="empty"><div class="empty-icon">🚌</div><p>No hay rutas disponibles</p></div>'; return; }
+  list.innerHTML = rutas.map(r=>`
+    <div class="role-card" onclick="window._selRuta('${r.id}')">
+      <div class="role-icon">🏘️</div>
+      <div class="role-text"><h3>${r.nombre}</h3><p>${r.paradas.length} paradas · ${r.horarios.map(turnoLabel).join(', ')}</p></div>
+      <span class="role-arr">›</span>
+    </div>`).join('');
+}
+
+window._selRuta = async function(rutaId) {
+  G.ruta  = dbGetRuta(rutaId);
+  G.turno = detectarTurno();
+  if (!G.ruta) return;
+
+  document.getElementById('t-header-title').textContent = 'Ruta ' + G.ruta.nombre;
+  document.getElementById('t-header-sub').textContent   = 'Turno ' + turnoLabel(G.turno);
+
+  // Registrar esta consulta activa
+  G.sesionId = await dbRegistrarConsulta(rutaId, G.turno);
+
+  detectarMiParada();
+  if (G.unsubGPS) G.unsubGPS();
+  G.unsubGPS = dbOnGPS(gpsData => refreshTracker(gpsData));
+  goTo('tracker');
+};
+
+window.volverInicio = async function() {
+  if (G.unsubGPS) { G.unsubGPS(); G.unsubGPS=null; }
+  if (G.sesionId) { await dbClearConsulta(G.sesionId); G.sesionId=null; }
+  G.ruta = null;
+  goTo('splash');
+};
+
+// Limpiar al cerrar la ventana
+window.addEventListener('beforeunload', () => {
+  if (G.sesionId) dbClearConsulta(G.sesionId);
+});
+
+function detectarMiParada() {
+  if (!navigator.geolocation) { G.miParada=2; return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      G.miParada = paradaMasCercana(pos.coords.latitude, pos.coords.longitude, G.ruta.paradas);
+      document.getElementById('t-ic-mi').textContent = G.ruta.paradas[G.miParada].nombre;
+      refreshTracker(_lastGps);
+    },
+    () => { G.miParada=2; document.getElementById('t-ic-mi').textContent = G.ruta.paradas[2]?.nombre+' (sim)' || '—'; }
+  );
+}
+
+let _lastGps = {};
+function refreshTracker(gpsAll) {
+  _lastGps = gpsAll;
+  if (!G.ruta) return;
+  const unidades = Object.values(dbGetUnidades()).filter(u=>u.ruta===G.ruta.id && u.activa);
+  const now = Date.now();
+  let gpsData=null, unidad=null;
+  for (const u of unidades) {
+    if (gpsAll[u.id] && (now - gpsAll[u.id].ts < 60000)) { gpsData=gpsAll[u.id]; unidad=u; break; }
+  }
+
+  const paradas=G.ruta.paradas, total=paradas.length;
+  if (!gpsData) {
+    document.getElementById('t-status').className='status-banner sb-off';
+    document.getElementById('t-sb-icon').textContent='📡';
+    document.getElementById('t-sb-title').textContent='Buseta sin señal';
+    document.getElementById('t-sb-desc').textContent='La unidad aún no inició la ruta o no tiene conexión';
+    document.getElementById('t-ic-cur').textContent='—'; document.getElementById('t-ic-unidad').textContent='—';
+    document.getElementById('t-ic-rest').textContent='—'; document.getElementById('t-ic-time').textContent='—';
+    document.getElementById('t-prog').style.width='0%'; document.getElementById('t-prog-pct').textContent='0%';
+    renderParadas(-1,paradas); return;
+  }
+
+  const curStop=gpsData.stopIdx, diff=G.miParada>=0?G.miParada-curStop:null;
+  const pct=Math.round((curStop/(total-1))*100);
+  document.getElementById('t-ic-unidad').textContent=unidad.nombre;
+  document.getElementById('t-ic-cur').textContent=paradas[curStop]?.nombre||'—';
+  if(G.miParada>=0) document.getElementById('t-ic-mi').textContent=paradas[G.miParada].nombre;
+  document.getElementById('t-prog').style.width=pct+'%';
+  document.getElementById('t-prog-pct').textContent=pct+'%';
+
+  const sb=document.getElementById('t-status'), icon=document.getElementById('t-sb-icon'),
+        title=document.getElementById('t-sb-title'), desc=document.getElementById('t-sb-desc');
+  if(diff===null){sb.className='status-banner sb-onway';icon.textContent='🚌';title.textContent='Buseta en camino';desc.textContent='Detectando tu parada…';document.getElementById('t-ic-rest').textContent='—';document.getElementById('t-ic-time').textContent='—';}
+  else if(diff>0){sb.className='status-banner sb-onway';icon.textContent='🚌';title.textContent='Buseta en camino';desc.textContent=`Faltan ${diff} parada${diff>1?'s':''} — llega en ~${diff*4} min`;document.getElementById('t-ic-rest').textContent=diff;document.getElementById('t-ic-time').textContent='~'+(diff*4)+' min';}
+  else if(diff===0){sb.className='status-banner sb-here';icon.textContent='🚨';title.textContent='¡La buseta está aquí!';desc.textContent='Dirígete al punto de recogida ahora mismo';document.getElementById('t-ic-rest').textContent='0';document.getElementById('t-ic-time').textContent='¡YA!';}
+  else{sb.className='status-banner sb-passed';icon.textContent='⚠️';title.textContent='La buseta ya pasó';desc.textContent='Contacta al conductor o espera el próximo turno';document.getElementById('t-ic-rest').textContent='—';document.getElementById('t-ic-time').textContent='Pasó';}
+  renderParadas(curStop,paradas);
+}
+
+function renderParadas(curStop,paradas) {
+  document.getElementById('t-paradas').innerHTML=paradas.map((p,i)=>{
+    const passed=curStop>=0&&i<curStop,current=i===curStop,isMe=i===G.miParada;
+    let dotCls=passed?'passed':current?'current':'',badges='';
+    if(passed)badges+='<span class="pbadge pbadge-pass">✓ Pasó</span>';
+    else if(current)badges+='<span class="pbadge pbadge-cur">📍 Aquí ahora</span>';
+    else badges+='<span class="pbadge pbadge-pend">Pendiente</span>';
+    if(isMe)badges+='<span class="pbadge pbadge-me">⭐ Tu parada</span>';
+    return `<div class="parada-item" style="${isMe?'background:rgba(59,130,246,.04);':''}">
+      <div class="stop-dot ${dotCls}"><div class="di"></div></div>
+      <div class="parada-info"><div class="parada-name">${p.nombre}</div><div class="parada-detail">${p.detalle}</div><div class="parada-badges">${badges}</div></div>
+    </div>`;
+  }).join('');
+}
+
+init();
+</script>
+</body>
+</html>
