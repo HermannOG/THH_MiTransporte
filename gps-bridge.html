@@ -24,25 +24,31 @@
   textarea { width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--surface2); color:var(--text); font-family:monospace; font-size:11px; resize:vertical; min-height:70px; }
   textarea:focus { outline:none; border-color:var(--accent); }
   .unit-card { margin:0 16px 10px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px; }
-  .unit-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .unit-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
   .dot { width:10px; height:10px; border-radius:50%; background:var(--muted); flex-shrink:0; }
   .dot.ok  { background:var(--green); box-shadow:0 0 6px rgba(34,197,94,.5); animation:blink 1.4s infinite; }
   .dot.err { background:var(--red); }
   .unit-name { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
   .unit-sub  { font-size:12px; color:var(--muted); }
-  .coords { font-family:monospace; font-size:11px; color:var(--accent); margin-top:4px; }
-  .ts     { font-size:11px; color:var(--muted); margin-top:2px; }
+  .unit-stop { font-size:13px; color:var(--accent); font-weight:600; margin-top:2px; }
+  .unit-dist { font-size:11px; color:var(--muted); margin-top:2px; }
+  .coords    { font-family:monospace; font-size:11px; color:var(--muted); margin-top:4px; }
+  .ts        { font-size:11px; color:var(--muted); margin-top:2px; }
+  .reset-btn { background:none; border:1px solid var(--border); color:var(--muted); font-size:11px; padding:3px 10px; border-radius:6px; cursor:pointer; margin-top:6px; }
+  .reset-btn:hover { border-color:var(--accent); color:var(--accent); }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
   .btn { display:block; width:calc(100% - 32px); margin:0 16px 10px; padding:15px; border-radius:12px; border:none; cursor:pointer; font-family:'Syne',sans-serif; font-size:15px; font-weight:700; text-align:center; }
   .btn-primary { background:var(--accent); color:white; }
   .btn-danger  { background:rgba(239,68,68,.12); color:var(--red); border:1px solid rgba(239,68,68,.25); }
-  .log { margin:0 16px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:12px; max-height:200px; overflow-y:auto; }
+  .log { margin:0 16px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:12px; max-height:220px; overflow-y:auto; }
   .log-line { font-family:monospace; font-size:11px; color:var(--muted); margin-bottom:3px; }
   .log-line.ok   { color:var(--green); }
   .log-line.err  { color:var(--red); }
   .log-line.info { color:var(--blue); }
   .warn { margin:16px; background:rgba(234,179,8,.08); border:1px solid rgba(234,179,8,.25); border-radius:12px; padding:14px; font-size:12px; color:var(--muted); line-height:1.6; }
   .warn strong { color:#eab308; }
+  .debug-box { margin:0 16px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:12px; font-size:11px; color:var(--muted); }
+  .debug-box h4 { font-size:12px; color:var(--text); margin-bottom:6px; }
 </style>
 </head>
 <body>
@@ -68,22 +74,45 @@
   <div style="font-size:11px;color:var(--muted);margin-top:6px;" id="token-info">Sin token</div>
 </div>
 
+<!-- Unidad 62 -->
 <div class="unit-card">
   <div class="unit-head">
     <div class="dot" id="dot-62"></div>
-    <div><div class="unit-name">HB4262</div><div class="unit-sub">Ruta San Rafael</div></div>
+    <div style="flex:1;">
+      <div class="unit-name">HB4262</div>
+      <div class="unit-sub" id="ruta-62">Cargando ruta…</div>
+    </div>
+    <button class="reset-btn" onclick="resetUnidad('62','U01')">🔄 Reset</button>
   </div>
-  <div class="coords" id="coords-62">Esperando GPS…</div>
-  <div class="ts"     id="ts-62">—</div>
+  <div class="unit-stop" id="stop-62">📍 —</div>
+  <div class="unit-dist" id="dist-62"></div>
+  <div class="coords"    id="coords-62">Esperando GPS…</div>
+  <div class="ts"        id="ts-62">—</div>
 </div>
 
+<!-- Unidad 63 -->
 <div class="unit-card">
   <div class="unit-head">
     <div class="dot" id="dot-63"></div>
-    <div><div class="unit-name">HB4263</div><div class="unit-sub">Ruta Heredia</div></div>
+    <div style="flex:1;">
+      <div class="unit-name">HB4263</div>
+      <div class="unit-sub" id="ruta-63">Cargando ruta…</div>
+    </div>
+    <button class="reset-btn" onclick="resetUnidad('63','U02')">🔄 Reset</button>
   </div>
-  <div class="coords" id="coords-63">Esperando GPS…</div>
-  <div class="ts"     id="ts-63">—</div>
+  <div class="unit-stop" id="stop-63">📍 —</div>
+  <div class="unit-dist" id="dist-63"></div>
+  <div class="coords"    id="coords-63">Esperando GPS…</div>
+  <div class="ts"        id="ts-63">—</div>
+</div>
+
+<!-- Debug: paradas detectadas -->
+<div class="debug-box" id="debug-box" style="display:none;">
+  <h4>🔍 Debug — Paradas cargadas</h4>
+  <div id="debug-content"></div>
+</div>
+<div style="text-align:center;margin:0 16px 10px;">
+  <button onclick="toggleDebug()" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;">Ver paradas cargadas</button>
 </div>
 
 <button class="btn btn-primary" id="btn-start" onclick="iniciar()">🚀 Iniciar Bridge</button>
@@ -95,7 +124,8 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, deleteDoc, collection, onSnapshot }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const app = initializeApp({
   apiKey:            "AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM",
@@ -107,27 +137,93 @@ const app = initializeApp({
 });
 const db = getFirestore(app);
 
-const PROXY_URL = 'https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment';
-const TENANT_ID = '742';
-const APP_ID    = '10001';
-const INTERVALO = 15000;
+const TENANT_ID  = '742';
+const APP_ID     = '10001';
+const INTERVALO  = 10000;
+const RADIO_M    = 80; // metros para considerar que llegó a la parada
 
+// ── IMPORTANTE: rutaId debe ser el ID EXACTO del documento en Firestore ───────
+// Si no sabes el ID exacto, activa el debug y verás todos los IDs cargados
 const VEHICULOS = {
-  '4273350242566909952': { sufijo:'62', unitId:'U01', ruta:'san-rafael' },
-  '4273350389036195840': { sufijo:'63', unitId:'U02', ruta:'heredia'    },
+  '4273350242566909952': { sufijo:'62', unitId:'U01', rutaId:'san-rafael' },
+  '4273350389036195840': { sufijo:'63', unitId:'U02', rutaId:'heredia'    },
 };
 
-let _iv       = null;
+let _iv         = null;
+let _rutasCache = {};
 
+// stopIdx actual por unidad — solo avanza, nunca retrocede
+const _stopActual = { U01: 0, U02: 0 };
 
+// ─── LEER RUTAS DE FIREBASE ───────────────────────────────────────────────────
+onSnapshot(collection(db, 'rutas'), snap => {
+  _rutasCache = {};
+  snap.forEach(d => { _rutasCache[d.id] = d.data(); });
+
+  // Mostrar IDs reales para diagnóstico
+  const ids = Object.keys(_rutasCache);
+  log('Rutas en Firebase: ' + ids.join(', '), 'info');
+
+  // Actualizar subtítulos
+  Object.values(VEHICULOS).forEach(v => {
+    const ruta = _rutasCache[v.rutaId];
+    const el   = document.getElementById('ruta-' + v.sufijo);
+    if (el) el.textContent = ruta ? 'Ruta ' + ruta.nombre : `⚠️ ID "${v.rutaId}" no encontrado`;
+  });
+
+  // Debug panel
+  const dbg = document.getElementById('debug-content');
+  dbg.innerHTML = ids.map(id => {
+    const r = _rutasCache[id];
+    return `<div style="margin-bottom:8px;padding:6px;background:var(--surface);border-radius:6px;">
+      <strong style="color:var(--accent);">${id}</strong> → ${r.nombre}<br>
+      ${(r.paradas||[]).map((p,i)=>`<span style="font-size:10px;">${i}: ${p.nombre} (${p.lat},${p.lng})</span>`).join('<br>')}
+    </div>`;
+  }).join('');
+});
+
+// ─── DISTANCIA EN METROS ──────────────────────────────────────────────────────
+function metrosEntre(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+// ─── CALCULAR stopIdx — solo avanza hacia adelante ────────────────────────────
+// Lógica:
+// 1. Busca la parada más cercana DESDE la parada actual en adelante
+// 2. Si está a ≤ RADIO_M metros de la siguiente parada → avanza
+// 3. Nunca retrocede
+function calcularStopIdx(lat, lng, paradas, stopActual) {
+  const total = paradas.length;
+
+  // Buscar desde stopActual en adelante cuál parada es la más cercana
+  let minDist = Infinity;
+  let mejorIdx = stopActual;
+
+  for (let i = stopActual; i < total; i++) {
+    const d = metrosEntre(lat, lng, paradas[i].lat, paradas[i].lng);
+    if (d < minDist) { minDist = d; mejorIdx = i; }
+    // Si encontramos una parada muy cercana, no seguir buscando más lejos
+    if (d < RADIO_M) break;
+  }
+
+  // Solo avanzar, nunca retroceder
+  const nuevo = Math.max(stopActual, mejorIdx);
+  return { idx: nuevo, distMetros: Math.round(minDist) };
+}
+
+// ─── UTILIDADES ───────────────────────────────────────────────────────────────
 function log(msg, tipo='info') {
   const box = document.getElementById('log');
   const hora = new Date().toLocaleTimeString('es-CR');
   const el   = document.createElement('div');
-  el.className    = 'log-line ' + tipo;
-  el.textContent  = `[${hora}] ${msg}`;
+  el.className   = 'log-line ' + tipo;
+  el.textContent = `[${hora}] ${msg}`;
   box.insertBefore(el, box.firstChild);
-  while (box.children.length > 60) box.removeChild(box.lastChild);
+  while (box.children.length > 80) box.removeChild(box.lastChild);
 }
 
 function turno() {
@@ -136,52 +232,34 @@ function turno() {
   if (h>=16&&h<20) return '6pm'; return '10pm';
 }
 
-function reqId() { return 'bt' + Math.random().toString(36).slice(2,8); }
+function reqId() { return 'bt'+Math.random().toString(36).slice(2,8); }
 
-// gpsIndex independiente por unidad
-const _gpsIndexPorVehiculo = {};
+const _gpsIndex = {};
 
+// ─── CONSULTAR UN VEHÍCULO ───────────────────────────────────────────────────
 async function consultarVehiculo(vid, vehic, token) {
-  const gpsIdx = _gpsIndexPorVehiculo[vid] || '0';
-  const url = `https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment?gpsIndex=${gpsIdx}&reqId=${reqId()}&vehicleId=${vid}`;
-  
+  const url = `https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment?gpsIndex=${_gpsIndex[vid]||'0'}&reqId=${reqId()}&vehicleId=${vid}`;
+
   try {
     const r = await fetch(url, {
       method: 'GET',
       headers: {
-        '_token':    token,
-        '_tenantid': TENANT_ID,
-        '_appid':    APP_ID,
-        '_langtype': 'es_ES',
-        'Accept':    'application/json, text/plain, */*',
+        '_token': token, '_tenantid': TENANT_ID,
+        '_appid': APP_ID, '_langtype': 'es_ES',
+        'Accept': 'application/json, text/plain, */*',
       }
     });
 
-    if (!r.ok) { log(`HB42${vehic.sufijo}: Error HTTP ${r.status}`, 'err'); return; }
+    if (!r.ok) { log(`HB42${vehic.sufijo}: HTTP ${r.status}`, 'err'); return; }
 
     const json = await r.json();
     if (!json.success || !json.data) return;
+    if (json.data.gpsIndex) _gpsIndex[vid] = json.data.gpsIndex;
 
-    // Actualizar gpsIndex de esta unidad
-    if (json.data.gpsIndex) _gpsIndexPorVehiculo[vid] = json.data.gpsIndex;
+    const lista = (json.data.gpsList || []).filter(i => String(i.vid) === String(vid));
+    if (!lista.length) { log(`HB42${vehic.sufijo}: sin cambios`, 'info'); return; }
 
-    const lista = json.data.gpsList || [];
-    
-    // Si no hay datos nuevos
-    if (!lista.length) {
-      log(`HB42${vehic.sufijo}: sin cambios`, 'info');
-      return;
-    }
-
-    // Filtrar solo los datos de ESTA unidad específica
-    const misDatos = lista.filter(i => String(i.vid) === String(vid));
-    if (!misDatos.length) {
-      log(`HB42${vehic.sufijo}: sin datos propios`, 'info');
-      return;
-    }
-
-    // Tomar el dato más reciente de esta unidad
-    const item = misDatos[misDatos.length - 1];
+    const item = lista[lista.length - 1];
     const lat  = item.lat / 1000000;
     const lng  = item.lng / 1000000;
 
@@ -191,16 +269,38 @@ async function consultarVehiculo(vid, vehic, token) {
       return;
     }
 
+    // ── BUSCAR LA RUTA ────────────────────────────────────────────────────────
+    const ruta = _rutasCache[vehic.rutaId];
+    let stopIdx = _stopActual[vehic.unitId] || 0;
+    let stopNombre = '—', distStr = '';
+
+    if (ruta && ruta.paradas && ruta.paradas.length > 0) {
+      const res  = calcularStopIdx(lat, lng, ruta.paradas, stopIdx);
+      stopIdx    = res.idx;
+      _stopActual[vehic.unitId] = stopIdx;  // guardar para próxima vez
+      stopNombre = ruta.paradas[stopIdx].nombre;
+      distStr    = res.distMetros < 1000
+        ? `${res.distMetros} m de "${stopNombre}"`
+        : `${(res.distMetros/1000).toFixed(1)} km de "${stopNombre}"`;
+
+      document.getElementById('dist-'+vehic.sufijo).textContent = '📏 ' + distStr;
+    } else {
+      log(`HB42${vehic.sufijo}: ⚠️ rutaId "${vehic.rutaId}" no encontrado. IDs disponibles: ${Object.keys(_rutasCache).join(', ')}`, 'err');
+    }
+
+    // ── GUARDAR EN FIREBASE ───────────────────────────────────────────────────
     await setDoc(doc(db, 'gps', vehic.unitId), {
-      lat, lng, stopIdx: 0,
-      estado: 'activo', ruta: vehic.ruta,
+      lat, lng, stopIdx,
+      estado: 'activo', ruta: vehic.rutaId,
       turno: turno(), fuente: 'powerfleet', ts: Date.now()
     });
 
+    // ── UI ────────────────────────────────────────────────────────────────────
     document.getElementById('dot-'+vehic.sufijo).className      = 'dot ok';
-    document.getElementById('coords-'+vehic.sufijo).textContent = lat.toFixed(5)+'° N, '+Math.abs(lng).toFixed(5)+'° W';
+    document.getElementById('stop-'+vehic.sufijo).textContent   = `📍 Parada ${stopIdx}: ${stopNombre}`;
+    document.getElementById('coords-'+vehic.sufijo).textContent = `${lat.toFixed(5)}° N, ${Math.abs(lng).toFixed(5)}° W`;
     document.getElementById('ts-'+vehic.sufijo).textContent     = 'Actualizado: '+new Date().toLocaleTimeString('es-CR');
-    log(`HB42${vehic.sufijo}: ${lat.toFixed(5)}, ${lng.toFixed(5)}`, 'ok');
+    log(`HB42${vehic.sufijo}: stop=${stopIdx} "${stopNombre}" | ${distStr}`, 'ok');
 
   } catch(e) {
     log(`HB42${vehic.sufijo}: ${e.message}`, 'err');
@@ -210,24 +310,29 @@ async function consultarVehiculo(vid, vehic, token) {
 async function consultar() {
   const token = document.getElementById('token').value.trim();
   if (!token) { log('Sin token', 'err'); return; }
-
-  // Consultar ambas unidades en paralelo
-  await Promise.all(
-    Object.entries(VEHICULOS).map(([vid, vehic]) => consultarVehiculo(vid, vehic, token))
-  );
+  await Promise.all(Object.entries(VEHICULOS).map(([vid,v]) => consultarVehiculo(vid, v, token)));
 }
+
+// Reset manual de una unidad (volver a parada 0)
+window.resetUnidad = async function(sufijo, unitId) {
+  _stopActual[unitId] = 0;
+  document.getElementById('stop-'+sufijo).textContent = '📍 Reiniciado a parada 0';
+  log(`Reset manual de ${unitId}`, 'info');
+};
 
 window.iniciar = async function() {
   const token = document.getElementById('token').value.trim();
   if (!token || token.length < 50) { alert('Pega el token primero'); return; }
   localStorage.setItem('bt_pf_token', token);
+  // Reset de índices al iniciar
+  Object.values(VEHICULOS).forEach(v => _stopActual[v.unitId] = 0);
   await consultar();
   _iv = setInterval(consultar, INTERVALO);
   document.getElementById('btn-start').style.display = 'none';
   document.getElementById('btn-stop').style.display  = 'block';
   const b = document.getElementById('badge');
   b.textContent = 'Activo'; b.className = 'badge on';
-  log('Bridge activo — consultando cada 15s', 'ok');
+  log('Bridge activo — cada 15s', 'ok');
 };
 
 window.detener = async function() {
@@ -237,8 +342,17 @@ window.detener = async function() {
   document.getElementById('btn-stop').style.display  = 'none';
   document.getElementById('badge').textContent = 'Inactivo';
   document.getElementById('badge').className   = 'badge';
-  ['62','63'].forEach(s => document.getElementById('dot-'+s).className = 'dot');
+  ['62','63'].forEach(s => {
+    document.getElementById('dot-'+s).className    = 'dot';
+    document.getElementById('stop-'+s).textContent = '📍 —';
+    document.getElementById('dist-'+s).textContent = '';
+  });
   log('Bridge detenido', 'info');
+};
+
+window.toggleDebug = function() {
+  const box = document.getElementById('debug-box');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
 };
 
 const saved = localStorage.getItem('bt_pf_token');
