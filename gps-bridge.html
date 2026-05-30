@@ -140,7 +140,6 @@ const db = getFirestore(app);
 const TENANT_ID  = '742';
 const APP_ID     = '10001';
 const INTERVALO  = 10000;
-const RADIO_M    = 80; // metros para considerar que llegó a la parada
 
 // ── IMPORTANTE: rutaId debe ser el ID EXACTO del documento en Firestore ───────
 // Si no sabes el ID exacto, activa el debug y verás todos los IDs cargados
@@ -191,28 +190,38 @@ function metrosEntre(lat1, lng1, lat2, lng2) {
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-// ─── CALCULAR stopIdx — solo avanza hacia adelante ────────────────────────────
+// ─── CALCULAR stopIdx por punto medio entre paradas ─────────────────────────
 // Lógica:
-// 1. Busca la parada más cercana DESDE la parada actual en adelante
-// 2. Si está a ≤ RADIO_M metros de la siguiente parada → avanza
-// 3. Nunca retrocede
+// - La ruta se divide en segmentos entre paradas consecutivas
+// - La unidad "pertenece" al segmento donde está más cerca
+// - Avanza a la parada N cuando supera el punto medio entre N-1 y N
+// - Nunca retrocede
 function calcularStopIdx(lat, lng, paradas, stopActual) {
   const total = paradas.length;
+  if (total === 0) return { idx: 0, distMetros: 0 };
+  if (total === 1) return { idx: 0, distMetros: Math.round(metrosEntre(lat, lng, paradas[0].lat, paradas[0].lng)) };
 
-  // Buscar desde stopActual en adelante cuál parada es la más cercana
-  let minDist = Infinity;
-  let mejorIdx = stopActual;
+  // Buscar desde stopActual en adelante
+  // Avanzar si la unidad está más cerca de la SIGUIENTE parada que de la ACTUAL
+  let idx = stopActual;
 
-  for (let i = stopActual; i < total; i++) {
-    const d = metrosEntre(lat, lng, paradas[i].lat, paradas[i].lng);
-    if (d < minDist) { minDist = d; mejorIdx = i; }
-    // Si encontramos una parada muy cercana, no seguir buscando más lejos
-    if (d < RADIO_M) break;
+  for (let i = stopActual; i < total - 1; i++) {
+    const distActual   = metrosEntre(lat, lng, paradas[i].lat,   paradas[i].lng);
+    const distSiguiente = metrosEntre(lat, lng, paradas[i+1].lat, paradas[i+1].lng);
+
+    if (distSiguiente < distActual) {
+      // La unidad está más cerca de la siguiente → avanzar
+      idx = i + 1;
+    } else {
+      // La unidad está más cerca de la actual → quedarse aquí
+      break;
+    }
   }
 
   // Solo avanzar, nunca retroceder
-  const nuevo = Math.max(stopActual, mejorIdx);
-  return { idx: nuevo, distMetros: Math.round(minDist) };
+  idx = Math.max(stopActual, idx);
+  const distActual = Math.round(metrosEntre(lat, lng, paradas[idx].lat, paradas[idx].lng));
+  return { idx, distMetros: distActual };
 }
 
 // ─── UTILIDADES ───────────────────────────────────────────────────────────────
