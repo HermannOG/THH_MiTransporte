@@ -63,7 +63,7 @@
 </div>
 
 <div class="warn">
-  <strong>✅ Auto-login activo:</strong> El bridge inicia sesión automáticamente con las credenciales configuradas y renueva el token cada 50 minutos. El campo de token manual sigue disponible como respaldo si falla el auto-login.
+  <strong>✅ Auto-login activo:</strong> El bridge obtiene el token automáticamente con la API key de Powerfleet. El token dura <strong>24 horas</strong> y se renueva solo. No necesitas hacer nada.
 </div>
 
 <div class="box">
@@ -115,7 +115,7 @@
   <button onclick="toggleDebug()" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;">Ver paradas cargadas</button>
 </div>
 
-<button class="btn btn-primary" id="btn-start" onclick="iniciar()">🚀 Iniciar Bridge (auto-login)</button>
+<button class="btn btn-primary" id="btn-start" onclick="iniciar()">🚀 Iniciar Bridge</button>
 <button class="btn btn-danger"  id="btn-stop"  onclick="detener()" style="display:none;">⏹ Detener Bridge</button>
 
 <div style="font-size:11px;color:var(--muted);padding:0 16px 8px;">Log de actividad</div>
@@ -325,45 +325,46 @@ async function consultarVehiculo(vid, vehic, token) {
 }
 
 
-// ─── AUTO-LOGIN POWERFLEET ────────────────────────────────────────────────────
-const PF_USER     = 'thh.50@hotmail.com';
-const PF_PASS     = 'Thh5012/2025';
-const PF_LOGIN_URL = 'https://us.visionai.unityaiot.com/gateway/base-user-service/api/v1/user/temp-access-token';
+// ─── AUTO-LOGIN POWERFLEET (Streamax apikey) ─────────────────────────────────
+const PF_APIKEY    = 'aeb264a8-4024-4a90-8948-1fcf565e600b';
+const PF_TOKEN_URL = 'https://worldmap.streamax.com/streamap-service/openapi/temp-access-token';
 let _tokenRenovando = false;
+let _tokenExpira    = 0; // timestamp de expiración
 
 async function renovarToken() {
   if (_tokenRenovando) return false;
   _tokenRenovando = true;
-  log('🔄 Renovando token automáticamente…', 'info');
+  log('🔄 Renovando token con apikey…', 'info');
   try {
-    const r = await fetch(PF_LOGIN_URL, {
+    const r = await fetch(PF_TOKEN_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        '_tenantid': TENANT_ID,
-        '_appid':    APP_ID,
-        '_langtype': 'es_ES',
-        'Accept':    'application/json, text/plain, */*',
+        'Content-Type':      'application/json',
+        'Accept':            'application/json, text/plain, */*',
+        'Origin':            'https://us.visionai.unityaiot.com',
+        'x-request-nonce':   Math.random().toString(36).slice(2),
+        'x-request-timestamp': Date.now().toString(),
       },
-      body: JSON.stringify({ loginName: PF_USER, loginPassword: PF_PASS })
+      body: JSON.stringify({ apikey: PF_APIKEY, sign: '', time: 0 })
     });
 
-    if (!r.ok) { log(`❌ Login fallido: HTTP ${r.status}`, 'err'); _tokenRenovando = false; return false; }
+    if (!r.ok) { log(`❌ Token fallido: HTTP ${r.status}`, 'err'); _tokenRenovando = false; return false; }
 
     const json = await r.json();
-    // El token puede venir en diferentes campos según la versión de la API
-    const nuevoToken = json?.data?.token || json?.data?.accessToken || json?.data || json?.token;
+    const nuevoToken = json?.data?.accessToken;
+    _tokenExpira     = json?.data?.expiresTime || 0;
 
     if (!nuevoToken || typeof nuevoToken !== 'string' || nuevoToken.length < 20) {
-      log('❌ Login fallido: no se encontró token en la respuesta. Respuesta: ' + JSON.stringify(json).slice(0,120), 'err');
+      log('❌ No se encontró token. Respuesta: ' + JSON.stringify(json).slice(0, 120), 'err');
       _tokenRenovando = false;
       return false;
     }
 
     document.getElementById('token').value = nuevoToken;
     localStorage.setItem('bt_pf_token', nuevoToken);
-    document.getElementById('token-info').textContent = `✅ Token renovado automáticamente (${nuevoToken.length} chars)`;
-    log('✅ Token renovado correctamente', 'ok');
+    const expiraEn = _tokenExpira ? new Date(_tokenExpira).toLocaleTimeString('es-CR') : '~24h';
+    document.getElementById('token-info').textContent = `✅ Token renovado — expira: ${expiraEn}`;
+    log(`✅ Token obtenido — expira: ${expiraEn}`, 'ok');
     _tokenRenovando = false;
     return true;
   } catch(e) {
@@ -373,12 +374,15 @@ async function renovarToken() {
   }
 }
 
-// Programar renovación cada 50 minutos (token dura 60 min)
+// Programar renovación 1 hora antes de que expire
 function programarRenovacion() {
+  // El token dura 24h, renovar cada 23 horas
+  const MS_23H = 23 * 60 * 60 * 1000;
   setInterval(async () => {
-    log('⏰ Renovación programada de token…', 'info');
+    log('⏰ Renovación programada de token (23h)…', 'info');
     await renovarToken();
-  }, 50 * 60 * 1000); // cada 50 minutos
+  }, MS_23H);
+  log(`🕐 Próxima renovación automática en 23 horas`, 'info');
 }
 
 async function consultar() {
@@ -400,13 +404,14 @@ window.iniciar = async function() {
   const loginOk = await renovarToken();
 
   if (!loginOk) {
-    // Si el auto-login falla, usar token manual si existe
-    const token = document.getElementById('token').value.trim();
-    if (!token || token.length < 20) {
-      alert('No se pudo obtener token automáticamente. Pega el token manualmente.');
-      return;
+    // Si el auto-login falla, usar token guardado si existe
+    const tokenGuardado = localStorage.getItem('bt_pf_token');
+    if (tokenGuardado && tokenGuardado.length > 20) {
+      document.getElementById('token').value = tokenGuardado;
+      log('⚠️ Auto-login falló, usando token guardado anteriormente', 'info');
+    } else {
+      log('⚠️ Auto-login falló y no hay token guardado. Pega uno manualmente.', 'err');
     }
-    log('⚠️ Usando token manual', 'info');
   }
 
   // Reset de índices al iniciar
