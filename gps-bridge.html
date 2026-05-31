@@ -63,7 +63,7 @@
 </div>
 
 <div class="warn">
-  <strong>✅ Auto-login activo:</strong> El bridge obtiene el token automáticamente con la API key de Powerfleet. El token dura <strong>24 horas</strong> y se renueva solo. No necesitas hacer nada.
+  <strong>🔌 Extensión Chrome activa:</strong> El bridge lee el token automáticamente desde la extensión BusetaTrack instalada en Chrome. Mantén Powerfleet abierto en una pestaña. El token se sincroniza cada 2 minutos.
 </div>
 
 <div class="box">
@@ -153,6 +153,48 @@ let _rutasCache = {};
 
 // stopIdx actual por unidad — solo avanza, nunca retrocede
 const _stopActual = { U01: 0, U02: 0 };
+
+
+// ─── LEER TOKEN DE FIREBASE (sincronizado por la extensión de Chrome) ─────────
+const FIRESTORE_REST = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
+const FIREBASE_KEY   = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
+
+let _tokenDeExtension = null;
+
+async function leerTokenDeFirebase() {
+  try {
+    const r = await fetch(`${FIRESTORE_REST}/bridge/token?key=${FIREBASE_KEY}`);
+    if (!r.ok) return null;
+    const json = await r.json();
+    const token = json?.fields?.token?.stringValue;
+    const ts    = parseInt(json?.fields?.ts?.integerValue || '0');
+    const activo = json?.fields?.activo?.booleanValue;
+    
+    if (!token || !activo) return null;
+    // Token válido si fue actualizado en las últimas 2 horas
+    if (Date.now() - ts > 2 * 60 * 60 * 1000) {
+      log('⚠️ Token de extensión muy antiguo', 'err');
+      return null;
+    }
+    return token;
+  } catch(e) {
+    return null;
+  }
+}
+
+async function sincronizarTokenExtension() {
+  const token = await leerTokenDeFirebase();
+  if (token && token !== _tokenDeExtension) {
+    _tokenDeExtension = token;
+    document.getElementById('token').value = token;
+    localStorage.setItem('bt_pf_token', token);
+    document.getElementById('token-info').textContent = '✅ Token sincronizado desde extensión Chrome';
+    log('🔌 Token actualizado desde extensión Chrome', 'ok');
+  }
+}
+
+// Revisar token de extensión cada 2 minutos
+setInterval(sincronizarTokenExtension, 2 * 60 * 1000);
 
 // ─── LEER RUTAS DE FIREBASE ───────────────────────────────────────────────────
 onSnapshot(collection(db, 'rutas'), snap => {
@@ -386,8 +428,13 @@ function programarRenovacion() {
 }
 
 async function consultar() {
-  const token = document.getElementById('token').value.trim();
-  if (!token) { log('Sin token', 'err'); return; }
+  let token = document.getElementById('token').value.trim();
+  // Si no hay token local, intentar obtener de Firebase (extensión)
+  if (!token || token.length < 20) {
+    await sincronizarTokenExtension();
+    token = document.getElementById('token').value.trim();
+  }
+  if (!token) { log('Sin token — abre Powerfleet con la extensión instalada', 'err'); return; }
   await Promise.all(Object.entries(VEHICULOS).map(([vid,v]) => consultarVehiculo(vid, v, token)));
 }
 
@@ -399,9 +446,19 @@ window.resetUnidad = async function(sufijo, unitId) {
 };
 
 window.iniciar = async function() {
-  // Intentar auto-login primero para obtener token fresco
-  log('🔐 Iniciando sesión en Powerfleet…', 'info');
-  const loginOk = await renovarToken();
+  // Intentar leer token de la extensión primero
+  log('🔌 Buscando token de extensión Chrome…', 'info');
+  await sincronizarTokenExtension();
+  const tokenExt = document.getElementById('token').value.trim();
+  
+  // Si no hay token de extensión, intentar auto-login con apikey
+  let loginOk = tokenExt.length > 20;
+  if (!loginOk) {
+    log('🔐 Sin extensión, intentando auto-login con apikey…', 'info');
+    loginOk = await renovarToken();
+  } else {
+    log('✅ Token de extensión encontrado', 'ok');
+  }
 
   if (!loginOk) {
     // Si el auto-login falla, usar token guardado si existe
