@@ -63,12 +63,12 @@
 </div>
 
 <div class="warn">
-  <strong>📌 Instrucciones:</strong> Abre Powerfleet en otra pestaña, presiona F12 → Network → cualquier request → Headers → copia el valor de <strong>_token</strong> y pégalo abajo.
+  <strong>✅ Auto-login activo:</strong> El bridge inicia sesión automáticamente con las credenciales configuradas y renueva el token cada 50 minutos. El campo de token manual sigue disponible como respaldo si falla el auto-login.
 </div>
 
 <div class="box">
-  <h3>🔑 Token de Powerfleet</h3>
-  <p>El token expira periódicamente. Cuando deje de funcionar, copia uno nuevo desde Powerfleet.</p>
+  <h3>🔑 Token (respaldo manual)</h3>
+  <p>El token se obtiene automáticamente. Solo usa este campo si el auto-login falla.</p>
   <label class="label">_token</label>
   <textarea id="token" placeholder="Pega aquí el _token..."></textarea>
   <div style="font-size:11px;color:var(--muted);margin-top:6px;" id="token-info">Sin token</div>
@@ -115,7 +115,7 @@
   <button onclick="toggleDebug()" style="background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;">Ver paradas cargadas</button>
 </div>
 
-<button class="btn btn-primary" id="btn-start" onclick="iniciar()">🚀 Iniciar Bridge</button>
+<button class="btn btn-primary" id="btn-start" onclick="iniciar()">🚀 Iniciar Bridge (auto-login)</button>
 <button class="btn btn-danger"  id="btn-stop"  onclick="detener()" style="display:none;">⏹ Detener Bridge</button>
 
 <div style="font-size:11px;color:var(--muted);padding:0 16px 8px;">Log de actividad</div>
@@ -259,7 +259,15 @@ async function consultarVehiculo(vid, vehic, token) {
       }
     });
 
-    if (!r.ok) { log(`HB42${vehic.sufijo}: HTTP ${r.status}`, 'err'); return; }
+    if (!r.ok) {
+      log(`HB42${vehic.sufijo}: HTTP ${r.status}`, 'err');
+      if (r.status === 401 || r.status === 403) {
+        log('Token expirado, renovando…', 'info');
+        const ok = await renovarToken();
+        if (ok) log('Reintentará en el próximo ciclo (10s)', 'info');
+      }
+      return;
+    }
 
     const json = await r.json();
     if (!json.success || !json.data) return;
@@ -316,6 +324,63 @@ async function consultarVehiculo(vid, vehic, token) {
   }
 }
 
+
+// ─── AUTO-LOGIN POWERFLEET ────────────────────────────────────────────────────
+const PF_USER     = 'thh.50@hotmail.com';
+const PF_PASS     = 'Thh5012/2025';
+const PF_LOGIN_URL = 'https://us.visionai.unityaiot.com/gateway/base-user-service/api/v1/user/temp-access-token';
+let _tokenRenovando = false;
+
+async function renovarToken() {
+  if (_tokenRenovando) return false;
+  _tokenRenovando = true;
+  log('🔄 Renovando token automáticamente…', 'info');
+  try {
+    const r = await fetch(PF_LOGIN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        '_tenantid': TENANT_ID,
+        '_appid':    APP_ID,
+        '_langtype': 'es_ES',
+        'Accept':    'application/json, text/plain, */*',
+      },
+      body: JSON.stringify({ loginName: PF_USER, loginPassword: PF_PASS })
+    });
+
+    if (!r.ok) { log(`❌ Login fallido: HTTP ${r.status}`, 'err'); _tokenRenovando = false; return false; }
+
+    const json = await r.json();
+    // El token puede venir en diferentes campos según la versión de la API
+    const nuevoToken = json?.data?.token || json?.data?.accessToken || json?.data || json?.token;
+
+    if (!nuevoToken || typeof nuevoToken !== 'string' || nuevoToken.length < 20) {
+      log('❌ Login fallido: no se encontró token en la respuesta. Respuesta: ' + JSON.stringify(json).slice(0,120), 'err');
+      _tokenRenovando = false;
+      return false;
+    }
+
+    document.getElementById('token').value = nuevoToken;
+    localStorage.setItem('bt_pf_token', nuevoToken);
+    document.getElementById('token-info').textContent = `✅ Token renovado automáticamente (${nuevoToken.length} chars)`;
+    log('✅ Token renovado correctamente', 'ok');
+    _tokenRenovando = false;
+    return true;
+  } catch(e) {
+    log('❌ Error al renovar token: ' + e.message, 'err');
+    _tokenRenovando = false;
+    return false;
+  }
+}
+
+// Programar renovación cada 50 minutos (token dura 60 min)
+function programarRenovacion() {
+  setInterval(async () => {
+    log('⏰ Renovación programada de token…', 'info');
+    await renovarToken();
+  }, 50 * 60 * 1000); // cada 50 minutos
+}
+
 async function consultar() {
   const token = document.getElementById('token').value.trim();
   if (!token) { log('Sin token', 'err'); return; }
@@ -330,18 +395,30 @@ window.resetUnidad = async function(sufijo, unitId) {
 };
 
 window.iniciar = async function() {
-  const token = document.getElementById('token').value.trim();
-  if (!token || token.length < 50) { alert('Pega el token primero'); return; }
-  localStorage.setItem('bt_pf_token', token);
+  // Intentar auto-login primero para obtener token fresco
+  log('🔐 Iniciando sesión en Powerfleet…', 'info');
+  const loginOk = await renovarToken();
+
+  if (!loginOk) {
+    // Si el auto-login falla, usar token manual si existe
+    const token = document.getElementById('token').value.trim();
+    if (!token || token.length < 20) {
+      alert('No se pudo obtener token automáticamente. Pega el token manualmente.');
+      return;
+    }
+    log('⚠️ Usando token manual', 'info');
+  }
+
   // Reset de índices al iniciar
   Object.values(VEHICULOS).forEach(v => _stopActual[v.unitId] = 0);
   await consultar();
   _iv = setInterval(consultar, INTERVALO);
+  programarRenovacion(); // renovar cada 50 min automáticamente
   document.getElementById('btn-start').style.display = 'none';
   document.getElementById('btn-stop').style.display  = 'block';
   const b = document.getElementById('badge');
   b.textContent = 'Activo'; b.className = 'badge on';
-  log('Bridge activo — cada 15s', 'ok');
+  log('Bridge activo — renovación automática cada 50 min', 'ok');
 };
 
 window.detener = async function() {
