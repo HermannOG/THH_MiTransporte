@@ -17,6 +17,7 @@
   .header-title { font-family:'Syne',sans-serif; font-weight:800; font-size:18px; }
   .badge { margin-left:auto; font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:1px; background:rgba(100,116,139,.15); border:1px solid rgba(100,116,139,.3); color:var(--muted); }
   .badge.on { background:rgba(34,197,94,.15); border-color:rgba(34,197,94,.3); color:var(--green); }
+  .badge.pause { background:rgba(234,179,8,.15); border-color:rgba(234,179,8,.3); color:#eab308; }
   .box { margin:16px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; }
   .box h3 { font-family:'Syne',sans-serif; font-size:15px; font-weight:700; margin-bottom:6px; }
   .box p  { font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:10px; }
@@ -47,6 +48,11 @@
   .log-line.info { color:var(--blue); }
   .warn { margin:16px; background:rgba(234,179,8,.08); border:1px solid rgba(234,179,8,.25); border-radius:12px; padding:14px; font-size:12px; color:var(--muted); line-height:1.6; }
   .warn strong { color:#eab308; }
+  .horario-card { margin:0 16px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:12px; font-size:12px; color:var(--muted); }
+  .horario-card h4 { font-size:12px; color:var(--text); margin-bottom:8px; font-family:'Syne',sans-serif; }
+  .horario-row { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid var(--border); }
+  .horario-row:last-child { border:none; }
+  .horario-activo { color:var(--green); font-weight:600; }
   .debug-box { margin:0 16px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:12px; font-size:11px; color:var(--muted); }
   .debug-box h4 { font-size:12px; color:var(--text); margin-bottom:6px; }
 </style>
@@ -57,13 +63,23 @@
   <span style="font-size:22px;">🛰️</span>
   <div>
     <div class="header-title">GPS Bridge</div>
-    <div style="font-size:11px;color:var(--muted);">Powerfleet → Firebase</div>
+    <div style="font-size:11px;color:var(--muted);" id="header-estado">Powerfleet → Firebase</div>
   </div>
   <span class="badge" id="badge">Inactivo</span>
 </div>
 
 <div class="warn">
   <strong>🔌 Extensión Chrome activa:</strong> El bridge lee el token automáticamente desde la extensión BusetaTrack instalada en Chrome. Mantén Powerfleet abierto en una pestaña. El token se sincroniza cada 2 minutos.
+</div>
+
+<!-- Horarios activos -->
+<div class="horario-card">
+  <h4>🕐 Horarios de consulta</h4>
+  <div class="horario-row"><span>Turno 6:00 AM</span><span id="h-6am">5:20 AM – 6:00 AM</span></div>
+  <div class="horario-row"><span>Turno 2:00 PM</span><span id="h-2pm">1:00 PM – 2:00 PM</span></div>
+  <div class="horario-row"><span>Turno 6:00 PM</span><span id="h-6pm">4:40 PM – 6:00 PM</span></div>
+  <div class="horario-row"><span>Turno 10:00 PM</span><span id="h-10pm">9:00 PM – 10:00 PM</span></div>
+  <div style="margin-top:8px;font-size:11px;" id="proximo-turno"></div>
 </div>
 
 <div class="box">
@@ -106,7 +122,6 @@
   <div class="ts"        id="ts-63">—</div>
 </div>
 
-<!-- Debug: paradas detectadas -->
 <div class="debug-box" id="debug-box" style="display:none;">
   <h4>🔍 Debug — Paradas cargadas</h4>
   <div id="debug-content"></div>
@@ -137,49 +152,120 @@ const app = initializeApp({
 });
 const db = getFirestore(app);
 
-const TENANT_ID  = '742';
-const APP_ID     = '10001';
-const INTERVALO  = 10000;
+const TENANT_ID = '742';
+const APP_ID    = '10001';
+const INTERVALO = 10000;
 
-// ── IMPORTANTE: rutaId debe ser el ID EXACTO del documento en Firestore ───────
-// Si no sabes el ID exacto, activa el debug y verás todos los IDs cargados
 const VEHICULOS = {
   '4273350242566909952': { sufijo:'62', unitId:'U01', rutaId:'E8KI0P'     },
   '4273350389036195840': { sufijo:'63', unitId:'U02', rutaId:'san-rafael' },
 };
 
+// ─── HORARIOS DE CONSULTA ─────────────────────────────────────────────────────
+// Cada turno: [horaInicio_minutos, horaFin_minutos]
+// en minutos desde medianoche para facilitar comparación
+const TURNOS = [
+  { nombre:'6am',  inicio: 5*60+20, fin: 6*60+5  }, // 5:20 AM → 6:05 AM
+  { nombre:'2pm',  inicio:13*60+0,  fin:14*60+5  }, // 1:00 PM → 2:05 PM
+  { nombre:'6pm',  inicio:16*60+40, fin:18*60+5  }, // 4:40 PM → 6:05 PM
+  { nombre:'10pm', inicio:21*60+0,  fin:22*60+5  }, // 9:00 PM → 10:05 PM
+];
+
+function minutosActuales() {
+  const ahora = new Date();
+  return ahora.getHours() * 60 + ahora.getMinutes();
+}
+
+function turnoActivo() {
+  const m = minutosActuales();
+  return TURNOS.find(t => m >= t.inicio && m <= t.fin) || null;
+}
+
+function proximoTurno() {
+  const m = minutosActuales();
+  // Buscar el siguiente turno que no haya empezado
+  const siguiente = TURNOS.find(t => t.inicio > m);
+  if (siguiente) {
+    const mins = siguiente.inicio - m;
+    const h = Math.floor(mins / 60), min = mins % 60;
+    return `⏳ Próximo turno (${siguiente.nombre}): en ${h > 0 ? h+'h ' : ''}${min} min`;
+  }
+  // Si ya pasaron todos los turnos de hoy, el primero de mañana
+  const primero = TURNOS[0];
+  const minsHastaMañana = (24*60 - m) + primero.inicio;
+  const h = Math.floor(minsHastaMañana/60), min = minsHastaMañana%60;
+  return `⏳ Próximo turno mañana (${primero.nombre}): en ${h}h ${min}min`;
+}
+
+function actualizarHorarioUI() {
+  const m = minutosActuales();
+  const activo = turnoActivo();
+  TURNOS.forEach(t => {
+    const el = document.getElementById('h-' + t.nombre);
+    if (!el) return;
+    if (activo && activo.nombre === t.nombre) {
+      el.className = 'horario-activo';
+      el.textContent = el.textContent.split('✓')[0].trim() + ' ✓ ACTIVO';
+    }
+  });
+  document.getElementById('proximo-turno').textContent = activo
+    ? '🟢 Consultando ahora — turno ' + activo.nombre
+    : proximoTurno();
+}
+
+// ─── RESET AUTOMÁTICO AL INICIO DE CADA TURNO ────────────────────────────────
+let _turnoAnterior = null;
+
+function verificarCambioTurno() {
+  const turno = turnoActivo();
+  const nombreTurno = turno ? turno.nombre : null;
+
+  // Si el turno cambió (incluyendo de null a algo, o de algo a algo nuevo)
+  if (nombreTurno !== _turnoAnterior) {
+    if (nombreTurno && _turnoAnterior !== null) {
+      // Nuevo turno activo → resetear índices
+      log('🔄 Nuevo turno detectado (' + nombreTurno + ') — reseteando paradas', 'info');
+      Object.values(VEHICULOS).forEach(v => {
+        _stopActual[v.unitId] = 0;
+        document.getElementById('stop-' + v.sufijo).textContent = '📍 Reiniciado para turno ' + nombreTurno;
+      });
+    } else if (nombreTurno && _turnoAnterior === null) {
+      // Primer turno del día / inicio del bridge en turno activo
+      log('🟢 Turno ' + nombreTurno + ' activo — iniciando consultas', 'info');
+      Object.values(VEHICULOS).forEach(v => _stopActual[v.unitId] = 0);
+    } else if (!nombreTurno) {
+      log('⏸ Fuera de horario de rutas — pausando consultas', 'info');
+      const b = document.getElementById('badge');
+      b.textContent = 'Pausado'; b.className = 'badge pause';
+      document.getElementById('header-estado').textContent = proximoTurno();
+    }
+    _turnoAnterior = nombreTurno;
+  }
+
+  actualizarHorarioUI();
+}
+
 let _iv         = null;
 let _rutasCache = {};
-
-// stopIdx actual por unidad — solo avanza, nunca retrocede
 const _stopActual = { U01: 0, U02: 0 };
 
-
-// ─── LEER TOKEN DE FIREBASE (sincronizado por la extensión de Chrome) ─────────
+// ─── LEER TOKEN DE FIREBASE ───────────────────────────────────────────────────
 const FIRESTORE_REST = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
 const FIREBASE_KEY   = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
-
 let _tokenDeExtension = null;
 
 async function leerTokenDeFirebase() {
   try {
-    const r = await fetch(`${FIRESTORE_REST}/bridge/token?key=${FIREBASE_KEY}`);
+    const r = await fetch(FIRESTORE_REST + '/bridge/token?key=' + FIREBASE_KEY);
     if (!r.ok) return null;
     const json = await r.json();
-    const token = json?.fields?.token?.stringValue;
-    const ts    = parseInt(json?.fields?.ts?.integerValue || '0');
+    const token  = json?.fields?.token?.stringValue;
+    const ts     = parseInt(json?.fields?.ts?.integerValue || '0');
     const activo = json?.fields?.activo?.booleanValue;
-    
     if (!token || !activo) return null;
-    // Token válido si fue actualizado en las últimas 2 horas
-    if (Date.now() - ts > 2 * 60 * 60 * 1000) {
-      log('⚠️ Token de extensión muy antiguo', 'err');
-      return null;
-    }
+    if (Date.now() - ts > 2 * 60 * 60 * 1000) { log('⚠️ Token de extensión muy antiguo', 'err'); return null; }
     return token;
-  } catch(e) {
-    return null;
-  }
+  } catch(e) { return null; }
 }
 
 async function sincronizarTokenExtension() {
@@ -193,77 +279,47 @@ async function sincronizarTokenExtension() {
   }
 }
 
-// Revisar token de extensión cada 2 minutos
 setInterval(sincronizarTokenExtension, 2 * 60 * 1000);
 
-// ─── LEER RUTAS DE FIREBASE ───────────────────────────────────────────────────
+// ─── RUTAS DE FIREBASE ────────────────────────────────────────────────────────
 onSnapshot(collection(db, 'rutas'), snap => {
   _rutasCache = {};
   snap.forEach(d => { _rutasCache[d.id] = d.data(); });
-
-  // Mostrar IDs reales para diagnóstico
   const ids = Object.keys(_rutasCache);
   log('Rutas en Firebase: ' + ids.join(', '), 'info');
-
-  // Actualizar subtítulos
   Object.values(VEHICULOS).forEach(v => {
     const ruta = _rutasCache[v.rutaId];
     const el   = document.getElementById('ruta-' + v.sufijo);
-    if (el) el.textContent = ruta ? 'Ruta ' + ruta.nombre : `⚠️ ID "${v.rutaId}" no encontrado`;
+    if (el) el.textContent = ruta ? 'Ruta ' + ruta.nombre : '⚠️ ID "' + v.rutaId + '" no encontrado';
   });
-
-  // Debug panel
   const dbg = document.getElementById('debug-content');
   dbg.innerHTML = ids.map(id => {
     const r = _rutasCache[id];
-    return `<div style="margin-bottom:8px;padding:6px;background:var(--surface);border-radius:6px;">
-      <strong style="color:var(--accent);">${id}</strong> → ${r.nombre}<br>
-      ${(r.paradas||[]).map((p,i)=>`<span style="font-size:10px;">${i}: ${p.nombre} (${p.lat},${p.lng})</span>`).join('<br>')}
-    </div>`;
+    return '<div style="margin-bottom:8px;padding:6px;background:var(--surface);border-radius:6px;"><strong style="color:var(--accent);">' + id + '</strong> → ' + r.nombre + '<br>' +
+      (r.paradas||[]).map((p,i) => '<span style="font-size:10px;">' + i + ': ' + p.nombre + ' (' + p.lat + ',' + p.lng + ')</span>').join('<br>') + '</div>';
   }).join('');
 });
 
-// ─── DISTANCIA EN METROS ──────────────────────────────────────────────────────
+// ─── DISTANCIA ────────────────────────────────────────────────────────────────
 function metrosEntre(lat1, lng1, lat2, lng2) {
-  const R = 6371000;
-  const dLat = (lat2-lat1)*Math.PI/180;
-  const dLng = (lng2-lng1)*Math.PI/180;
+  const R = 6371000, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-// ─── CALCULAR stopIdx por punto medio entre paradas ─────────────────────────
-// Lógica:
-// - La ruta se divide en segmentos entre paradas consecutivas
-// - La unidad "pertenece" al segmento donde está más cerca
-// - Avanza a la parada N cuando supera el punto medio entre N-1 y N
-// - Nunca retrocede
+// ─── CALCULAR PARADA ─────────────────────────────────────────────────────────
 function calcularStopIdx(lat, lng, paradas, stopActual) {
   const total = paradas.length;
-  if (total === 0) return { idx: 0, distMetros: 0 };
-  if (total === 1) return { idx: 0, distMetros: Math.round(metrosEntre(lat, lng, paradas[0].lat, paradas[0].lng)) };
-
-  // Buscar desde stopActual en adelante
-  // Avanzar si la unidad está más cerca de la SIGUIENTE parada que de la ACTUAL
+  if (total === 0) return { idx:0, distMetros:0 };
+  if (total === 1) return { idx:0, distMetros:Math.round(metrosEntre(lat,lng,paradas[0].lat,paradas[0].lng)) };
   let idx = stopActual;
-
-  for (let i = stopActual; i < total - 1; i++) {
-    const distActual   = metrosEntre(lat, lng, paradas[i].lat,   paradas[i].lng);
-    const distSiguiente = metrosEntre(lat, lng, paradas[i+1].lat, paradas[i+1].lng);
-
-    if (distSiguiente < distActual) {
-      // La unidad está más cerca de la siguiente → avanzar
-      idx = i + 1;
-    } else {
-      // La unidad está más cerca de la actual → quedarse aquí
-      break;
-    }
+  for (let i = stopActual; i < total-1; i++) {
+    const dA = metrosEntre(lat,lng,paradas[i].lat,paradas[i].lng);
+    const dS = metrosEntre(lat,lng,paradas[i+1].lat,paradas[i+1].lng);
+    if (dS < dA) idx = i+1; else break;
   }
-
-  // Solo avanzar, nunca retroceder
   idx = Math.max(stopActual, idx);
-  const distActual = Math.round(metrosEntre(lat, lng, paradas[idx].lat, paradas[idx].lng));
-  return { idx, distMetros: distActual };
+  return { idx, distMetros: Math.round(metrosEntre(lat,lng,paradas[idx].lat,paradas[idx].lng)) };
 }
 
 // ─── UTILIDADES ───────────────────────────────────────────────────────────────
@@ -271,249 +327,158 @@ function log(msg, tipo='info') {
   const box = document.getElementById('log');
   const hora = new Date().toLocaleTimeString('es-CR');
   const el   = document.createElement('div');
-  el.className   = 'log-line ' + tipo;
-  el.textContent = `[${hora}] ${msg}`;
+  el.className = 'log-line ' + tipo;
+  el.textContent = '[' + hora + '] ' + msg;
   box.insertBefore(el, box.firstChild);
   while (box.children.length > 80) box.removeChild(box.lastChild);
 }
 
-function turno() {
-  const h = new Date().getHours();
-  if (h>=4&&h<10) return '6am'; if (h>=11&&h<15) return '2pm';
-  if (h>=16&&h<20) return '6pm'; return '10pm';
+function turnoLabel() {
+  const t = turnoActivo();
+  if (!t) return '10pm';
+  return t.nombre;
 }
 
 function reqId() { return 'bt'+Math.random().toString(36).slice(2,8); }
-
 const _gpsIndex = {};
 
-// ─── CONSULTAR UN VEHÍCULO ───────────────────────────────────────────────────
+// ─── CONSULTAR VEHÍCULO ───────────────────────────────────────────────────────
 async function consultarVehiculo(vid, vehic, token) {
-  const url = `https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment?gpsIndex=${_gpsIndex[vid]||'0'}&reqId=${reqId()}&vehicleId=${vid}`;
-
+  const url = 'https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment?gpsIndex=' + (_gpsIndex[vid]||'0') + '&reqId=' + reqId() + '&vehicleId=' + vid;
   try {
     const r = await fetch(url, {
-      method: 'GET',
-      headers: {
-        '_token': token, '_tenantid': TENANT_ID,
-        '_appid': APP_ID, '_langtype': 'es_ES',
-        'Accept': 'application/json, text/plain, */*',
-      }
+      method:'GET',
+      headers:{ '_token':token, '_tenantid':TENANT_ID, '_appid':APP_ID, '_langtype':'es_ES', 'Accept':'application/json, text/plain, */*' }
     });
-
     if (!r.ok) {
-      log(`HB42${vehic.sufijo}: HTTP ${r.status}`, 'err');
-      if (r.status === 401 || r.status === 403) {
-        log('Token expirado, renovando…', 'info');
-        const ok = await renovarToken();
-        if (ok) log('Reintentará en el próximo ciclo (10s)', 'info');
-      }
+      log('HB42' + vehic.sufijo + ': HTTP ' + r.status, 'err');
+      if (r.status===401||r.status===403) { log('Token expirado, renovando…','info'); await renovarToken(); }
       return;
     }
-
     const json = await r.json();
-    if (!json.success || !json.data) return;
+    if (!json.success||!json.data) return;
     if (json.data.gpsIndex) _gpsIndex[vid] = json.data.gpsIndex;
-
-    const lista = (json.data.gpsList || []).filter(i => String(i.vid) === String(vid));
-    if (!lista.length) { log(`HB42${vehic.sufijo}: sin cambios`, 'info'); return; }
-
-    const item = lista[lista.length - 1];
-    const lat  = item.lat / 1000000;
-    const lng  = item.lng / 1000000;
-
-    if (lat < 8 || lat > 11 || lng < -86 || lng > -82) {
-      log(`HB42${vehic.sufijo}: coords fuera de CR`, 'err');
-      document.getElementById('dot-'+vehic.sufijo).className = 'dot err';
-      return;
-    }
-
-    // ── BUSCAR LA RUTA ────────────────────────────────────────────────────────
+    const lista = (json.data.gpsList||[]).filter(i=>String(i.vid)===String(vid));
+    if (!lista.length) { log('HB42'+vehic.sufijo+': sin cambios','info'); return; }
+    const item = lista[lista.length-1];
+    const lat  = item.lat/1000000, lng = item.lng/1000000;
+    if (lat<8||lat>11||lng<-86||lng>-82) { log('HB42'+vehic.sufijo+': coords fuera de CR','err'); document.getElementById('dot-'+vehic.sufijo).className='dot err'; return; }
     const ruta = _rutasCache[vehic.rutaId];
-    let stopIdx = _stopActual[vehic.unitId] || 0;
-    let stopNombre = '—', distStr = '';
-
-    if (ruta && ruta.paradas && ruta.paradas.length > 0) {
-      const res  = calcularStopIdx(lat, lng, ruta.paradas, stopIdx);
-      stopIdx    = res.idx;
-      _stopActual[vehic.unitId] = stopIdx;  // guardar para próxima vez
+    let stopIdx = _stopActual[vehic.unitId]||0, stopNombre='—', distStr='';
+    if (ruta&&ruta.paradas&&ruta.paradas.length>0) {
+      const res = calcularStopIdx(lat,lng,ruta.paradas,stopIdx);
+      stopIdx = res.idx; _stopActual[vehic.unitId] = stopIdx;
       stopNombre = ruta.paradas[stopIdx].nombre;
-      distStr    = res.distMetros < 1000
-        ? `${res.distMetros} m de "${stopNombre}"`
-        : `${(res.distMetros/1000).toFixed(1)} km de "${stopNombre}"`;
-
+      distStr = res.distMetros<1000 ? res.distMetros+' m de "'+stopNombre+'"' : (res.distMetros/1000).toFixed(1)+' km de "'+stopNombre+'"';
       document.getElementById('dist-'+vehic.sufijo).textContent = '📏 ' + distStr;
     } else {
-      log(`HB42${vehic.sufijo}: ⚠️ rutaId "${vehic.rutaId}" no encontrado. IDs disponibles: ${Object.keys(_rutasCache).join(', ')}`, 'err');
+      log('HB42'+vehic.sufijo+': rutaId "'+vehic.rutaId+'" no encontrado. IDs: '+Object.keys(_rutasCache).join(', '),'err');
     }
-
-    // ── GUARDAR EN FIREBASE ───────────────────────────────────────────────────
-    await setDoc(doc(db, 'gps', vehic.unitId), {
-      lat, lng, stopIdx,
-      estado: 'activo', ruta: vehic.rutaId,
-      turno: turno(), fuente: 'powerfleet', ts: Date.now()
-    });
-
-    // ── UI ────────────────────────────────────────────────────────────────────
-    document.getElementById('dot-'+vehic.sufijo).className      = 'dot ok';
-    document.getElementById('stop-'+vehic.sufijo).textContent   = `📍 Parada ${stopIdx}: ${stopNombre}`;
-    document.getElementById('coords-'+vehic.sufijo).textContent = `${lat.toFixed(5)}° N, ${Math.abs(lng).toFixed(5)}° W`;
-    document.getElementById('ts-'+vehic.sufijo).textContent     = 'Actualizado: '+new Date().toLocaleTimeString('es-CR');
-    log(`HB42${vehic.sufijo}: stop=${stopIdx} "${stopNombre}" | ${distStr}`, 'ok');
-
-  } catch(e) {
-    log(`HB42${vehic.sufijo}: ${e.message}`, 'err');
-  }
+    await setDoc(doc(db,'gps',vehic.unitId), { lat,lng,stopIdx,estado:'activo',ruta:vehic.rutaId,turno:turnoLabel(),fuente:'powerfleet',ts:Date.now() });
+    document.getElementById('dot-'+vehic.sufijo).className = 'dot ok';
+    document.getElementById('stop-'+vehic.sufijo).textContent = '📍 Parada '+stopIdx+': '+stopNombre;
+    document.getElementById('coords-'+vehic.sufijo).textContent = lat.toFixed(5)+'° N, '+Math.abs(lng).toFixed(5)+'° W';
+    document.getElementById('ts-'+vehic.sufijo).textContent = 'Actualizado: '+new Date().toLocaleTimeString('es-CR');
+    log('HB42'+vehic.sufijo+': stop='+stopIdx+' "'+stopNombre+'" | '+distStr,'ok');
+  } catch(e) { log('HB42'+vehic.sufijo+': '+e.message,'err'); }
 }
 
-
-// ─── AUTO-LOGIN POWERFLEET (Streamax apikey) ─────────────────────────────────
+// ─── AUTO-LOGIN ───────────────────────────────────────────────────────────────
 const PF_APIKEY    = 'aeb264a8-4024-4a90-8948-1fcf565e600b';
 const PF_TOKEN_URL = 'https://worldmap.streamax.com/streamap-service/openapi/temp-access-token';
 let _tokenRenovando = false;
-let _tokenExpira    = 0; // timestamp de expiración
 
 async function renovarToken() {
   if (_tokenRenovando) return false;
   _tokenRenovando = true;
-  log('🔄 Renovando token con apikey…', 'info');
+  log('🔄 Renovando token…','info');
   try {
-    const r = await fetch(PF_TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type':      'application/json',
-        'Accept':            'application/json, text/plain, */*',
-        'Origin':            'https://us.visionai.unityaiot.com',
-        'x-request-nonce':   Math.random().toString(36).slice(2),
-        'x-request-timestamp': Date.now().toString(),
-      },
-      body: JSON.stringify({ apikey: PF_APIKEY, sign: '', time: 0 })
-    });
-
-    if (!r.ok) { log(`❌ Token fallido: HTTP ${r.status}`, 'err'); _tokenRenovando = false; return false; }
-
+    const r = await fetch(PF_TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json, text/plain, */*','Origin':'https://us.visionai.unityaiot.com','x-request-nonce':Math.random().toString(36).slice(2),'x-request-timestamp':Date.now().toString()},body:JSON.stringify({apikey:PF_APIKEY,sign:'',time:0})});
+    if (!r.ok) { _tokenRenovando=false; return false; }
     const json = await r.json();
-    const nuevoToken = json?.data?.accessToken;
-    _tokenExpira     = json?.data?.expiresTime || 0;
-
-    if (!nuevoToken || typeof nuevoToken !== 'string' || nuevoToken.length < 20) {
-      log('❌ No se encontró token. Respuesta: ' + JSON.stringify(json).slice(0, 120), 'err');
-      _tokenRenovando = false;
-      return false;
-    }
-
-    document.getElementById('token').value = nuevoToken;
-    localStorage.setItem('bt_pf_token', nuevoToken);
-    const expiraEn = _tokenExpira ? new Date(_tokenExpira).toLocaleTimeString('es-CR') : '~24h';
-    document.getElementById('token-info').textContent = `✅ Token renovado — expira: ${expiraEn}`;
-    log(`✅ Token obtenido — expira: ${expiraEn}`, 'ok');
-    _tokenRenovando = false;
-    return true;
-  } catch(e) {
-    log('❌ Error al renovar token: ' + e.message, 'err');
-    _tokenRenovando = false;
-    return false;
-  }
+    const t = json?.data?.accessToken;
+    if (!t||t.length<20) { _tokenRenovando=false; return false; }
+    document.getElementById('token').value = t;
+    localStorage.setItem('bt_pf_token',t);
+    const exp = json?.data?.expiresTime ? new Date(json.data.expiresTime).toLocaleTimeString('es-CR') : '~24h';
+    document.getElementById('token-info').textContent = '✅ Token renovado — expira: '+exp;
+    log('✅ Token obtenido','ok'); _tokenRenovando=false; return true;
+  } catch(e) { log('❌ Error renovando: '+e.message,'err'); _tokenRenovando=false; return false; }
 }
 
-// Programar renovación 1 hora antes de que expire
-function programarRenovacion() {
-  // El token dura 24h, renovar cada 23 horas
-  const MS_23H = 23 * 60 * 60 * 1000;
-  setInterval(async () => {
-    log('⏰ Renovación programada de token (23h)…', 'info');
-    await renovarToken();
-  }, MS_23H);
-  log(`🕐 Próxima renovación automática en 23 horas`, 'info');
-}
-
+// ─── CONSULTAR (con control de horario) ──────────────────────────────────────
 async function consultar() {
-  let token = document.getElementById('token').value.trim();
-  // Si no hay token local, intentar obtener de Firebase (extensión)
-  if (!token || token.length < 20) {
-    await sincronizarTokenExtension();
-    token = document.getElementById('token').value.trim();
+  // Verificar si estamos en horario de ruta
+  verificarCambioTurno();
+  const turnoEnCurso = turnoActivo();
+
+  if (!turnoEnCurso) {
+    // Fuera de horario — no consultar API
+    log('⏸ Fuera de horario, esperando próximo turno…','info');
+    const b = document.getElementById('badge');
+    if (b.textContent !== 'Pausado') { b.textContent='Pausado'; b.className='badge pause'; }
+    return;
   }
-  if (!token) { log('Sin token — abre Powerfleet con la extensión instalada', 'err'); return; }
-  await Promise.all(Object.entries(VEHICULOS).map(([vid,v]) => consultarVehiculo(vid, v, token)));
+
+  // En horario — consultar normalmente
+  const b = document.getElementById('badge');
+  if (b.textContent !== 'Activo') { b.textContent='Activo'; b.className='badge on'; }
+
+  let token = document.getElementById('token').value.trim();
+  if (!token||token.length<20) { await sincronizarTokenExtension(); token=document.getElementById('token').value.trim(); }
+  if (!token) { log('Sin token','err'); return; }
+  await Promise.all(Object.entries(VEHICULOS).map(([vid,v])=>consultarVehiculo(vid,v,token)));
 }
 
-// Reset manual de una unidad (volver a parada 0)
+// ─── CONTROLES ───────────────────────────────────────────────────────────────
 window.resetUnidad = async function(sufijo, unitId) {
-  _stopActual[unitId] = 0;
-  document.getElementById('stop-'+sufijo).textContent = '📍 Reiniciado a parada 0';
-  log(`Reset manual de ${unitId}`, 'info');
+  _stopActual[unitId]=0;
+  document.getElementById('stop-'+sufijo).textContent='📍 Reiniciado a parada 0';
+  log('Reset manual de '+unitId,'info');
 };
 
 window.iniciar = async function() {
-  // Intentar leer token de la extensión primero
-  log('🔌 Buscando token de extensión Chrome…', 'info');
+  log('🔌 Buscando token de extensión Chrome…','info');
   await sincronizarTokenExtension();
   const tokenExt = document.getElementById('token').value.trim();
-  
-  // Si no hay token de extensión, intentar auto-login con apikey
-  let loginOk = tokenExt.length > 20;
+  let loginOk = tokenExt.length>20;
+  if (!loginOk) { log('🔐 Sin extensión, intentando auto-login…','info'); loginOk=await renovarToken(); } else { log('✅ Token de extensión encontrado','ok'); }
   if (!loginOk) {
-    log('🔐 Sin extensión, intentando auto-login con apikey…', 'info');
-    loginOk = await renovarToken();
-  } else {
-    log('✅ Token de extensión encontrado', 'ok');
+    const tg=localStorage.getItem('bt_pf_token');
+    if (tg&&tg.length>20) { document.getElementById('token').value=tg; log('⚠️ Usando token guardado','info'); }
+    else { log('⚠️ Sin token. Pega uno manualmente.','err'); }
   }
-
-  if (!loginOk) {
-    // Si el auto-login falla, usar token guardado si existe
-    const tokenGuardado = localStorage.getItem('bt_pf_token');
-    if (tokenGuardado && tokenGuardado.length > 20) {
-      document.getElementById('token').value = tokenGuardado;
-      log('⚠️ Auto-login falló, usando token guardado anteriormente', 'info');
-    } else {
-      log('⚠️ Auto-login falló y no hay token guardado. Pega uno manualmente.', 'err');
-    }
-  }
-
-  // Reset de índices al iniciar
-  Object.values(VEHICULOS).forEach(v => _stopActual[v.unitId] = 0);
+  Object.values(VEHICULOS).forEach(v=>_stopActual[v.unitId]=0);
+  _turnoAnterior = null; // forzar detección de turno al iniciar
+  verificarCambioTurno();
   await consultar();
   _iv = setInterval(consultar, INTERVALO);
-  programarRenovacion(); // renovar cada 50 min automáticamente
-  document.getElementById('btn-start').style.display = 'none';
-  document.getElementById('btn-stop').style.display  = 'block';
-  const b = document.getElementById('badge');
-  b.textContent = 'Activo'; b.className = 'badge on';
-  log('Bridge activo — renovación automática cada 50 min', 'ok');
+  setInterval(sincronizarTokenExtension, 2*60*1000);
+  setInterval(async()=>{ log('⏰ Renovación programada','info'); await renovarToken(); }, 23*60*60*1000);
+  document.getElementById('btn-start').style.display='none';
+  document.getElementById('btn-stop').style.display='block';
+  log('Bridge activo — control automático de horarios','ok');
 };
 
 window.detener = async function() {
-  if (_iv) { clearInterval(_iv); _iv = null; }
-  try { await deleteDoc(doc(db,'gps','U01')); await deleteDoc(doc(db,'gps','U02')); } catch(e){}
-  document.getElementById('btn-start').style.display = 'block';
-  document.getElementById('btn-stop').style.display  = 'none';
-  document.getElementById('badge').textContent = 'Inactivo';
-  document.getElementById('badge').className   = 'badge';
-  ['62','63'].forEach(s => {
-    document.getElementById('dot-'+s).className    = 'dot';
-    document.getElementById('stop-'+s).textContent = '📍 —';
-    document.getElementById('dist-'+s).textContent = '';
-  });
-  log('Bridge detenido', 'info');
+  if (_iv){clearInterval(_iv);_iv=null;}
+  try{await deleteDoc(doc(db,'gps','U01'));await deleteDoc(doc(db,'gps','U02'));}catch(e){}
+  document.getElementById('btn-start').style.display='block';
+  document.getElementById('btn-stop').style.display='none';
+  document.getElementById('badge').textContent='Inactivo'; document.getElementById('badge').className='badge';
+  document.getElementById('header-estado').textContent='Powerfleet → Firebase';
+  ['62','63'].forEach(s=>{document.getElementById('dot-'+s).className='dot';document.getElementById('stop-'+s).textContent='📍 —';document.getElementById('dist-'+s).textContent='';});
+  log('Bridge detenido','info');
 };
 
-window.toggleDebug = function() {
-  const box = document.getElementById('debug-box');
-  box.style.display = box.style.display === 'none' ? 'block' : 'none';
-};
+window.toggleDebug=function(){const b=document.getElementById('debug-box');b.style.display=b.style.display==='none'?'block':'none';};
 
-const saved = localStorage.getItem('bt_pf_token');
-if (saved) {
-  document.getElementById('token').value = saved;
-  document.getElementById('token-info').textContent = '✅ Token previo cargado';
-  log('Token previo encontrado', 'info');
-}
-document.getElementById('token').addEventListener('input', e => {
-  const v = e.target.value.trim();
-  document.getElementById('token-info').textContent = v.length > 50
-    ? `✅ Token válido (${v.length} chars)` : '⚠️ Token muy corto';
-});
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+const saved=localStorage.getItem('bt_pf_token');
+if(saved){document.getElementById('token').value=saved;document.getElementById('token-info').textContent='✅ Token previo cargado';log('Token previo encontrado','info');}
+document.getElementById('token').addEventListener('input',e=>{const v=e.target.value.trim();document.getElementById('token-info').textContent=v.length>50?'✅ Token válido ('+v.length+' chars)':'⚠️ Token muy corto';});
+actualizarHorarioUI();
+setInterval(actualizarHorarioUI, 60000); // actualizar display de horarios cada minuto
 </script>
 </body>
 </html>
