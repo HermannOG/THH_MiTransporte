@@ -74,7 +74,7 @@
 
 <!-- Horarios activos -->
 <div class="horario-card">
-  <h4>🕐 Horarios de consulta</h4>
+  <h4 style="display:flex;align-items:center;justify-content:space-between;">🕐 Horarios de consulta <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;font-weight:400;color:var(--muted);"><input type="checkbox" id="toggle-horarios" checked style="accent-color:var(--accent);"> Activado</label></h4>
   <div class="horario-row"><span>Turno 6:00 AM</span><span id="h-6am">5:20 AM – 6:00 AM</span></div>
   <div class="horario-row"><span>Turno 2:00 PM</span><span id="h-2pm">1:00 PM – 2:00 PM</span></div>
   <div class="horario-row"><span>Turno 6:00 PM</span><span id="h-6pm">4:40 PM – 6:00 PM</span></div>
@@ -410,17 +410,18 @@ async function renovarToken() {
 async function consultar() {
   // Verificar si estamos en horario de ruta
   verificarCambioTurno();
+  const horariosActivos = document.getElementById('toggle-horarios')?.checked !== false;
   const turnoEnCurso = turnoActivo();
 
-  if (!turnoEnCurso) {
-    // Fuera de horario — no consultar API
+  if (horariosActivos && !turnoEnCurso) {
+    // Fuera de horario y con control de horarios activado — no consultar API
     log('⏸ Fuera de horario, esperando próximo turno…','info');
     const b = document.getElementById('badge');
     if (b.textContent !== 'Pausado') { b.textContent='Pausado'; b.className='badge pause'; }
     return;
   }
 
-  // En horario — consultar normalmente
+  // En horario (o control desactivado) — consultar normalmente
   const b = document.getElementById('badge');
   if (b.textContent !== 'Activo') { b.textContent='Activo'; b.className='badge on'; }
 
