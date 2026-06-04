@@ -335,6 +335,9 @@ onSnapshot(collection(db, 'rutas'), snap => {
     _rutasCache[d.id] = data;
     if (data.ventanas) {
       _horariosPorRuta[d.id] = data.ventanas;
+      log('Horarios cargados para ruta ' + d.id + ': ' + JSON.stringify(data.ventanas).slice(0,80), 'info');
+    } else {
+      log('⚠️ Ruta ' + d.id + ' sin ventanas configuradas — usando defaults', 'info');
     }
   });
   // Actualizar tabla de horarios en UI con los datos reales de Firebase
