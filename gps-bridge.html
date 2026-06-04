@@ -333,11 +333,12 @@ onSnapshot(collection(db, 'rutas'), snap => {
   snap.forEach(d => {
     const data = d.data();
     _rutasCache[d.id] = data;
-    // Cargar ventanas horarias de esta ruta
     if (data.ventanas) {
       _horariosPorRuta[d.id] = data.ventanas;
     }
   });
+  // Actualizar tabla de horarios en UI con los datos reales de Firebase
+  actualizarTablaHorarios();
   const ids = Object.keys(_rutasCache);
   log('Rutas en Firebase: ' + ids.join(', '), 'info');
   Object.values(VEHICULOS).forEach(v => {
