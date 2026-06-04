@@ -130,6 +130,23 @@
 
   .import-box { background:rgba(249,115,22,.08); border:1px solid rgba(249,115,22,.3); border-radius:14px; padding:16px; margin-bottom:20px; }
   .import-box h4 { font-family:'Syne',sans-serif; font-weight:700; margin-bottom:6px; font-size:14px; color:var(--accent); }
+  /* ── SEGURIDAD ── */
+  #mapa-exclusion { height:280px; width:100%; border-radius:12px; overflow:hidden; border:1px solid var(--border); margin-bottom:12px; }
+  .exclusion-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .exclusion-card h3 { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; margin-bottom:6px; }
+  .exclusion-card p  { font-size:12px; color:var(--muted); margin-bottom:12px; line-height:1.5; }
+  .radio-display { font-family:'Syne',sans-serif; font-size:22px; font-weight:700; color:var(--accent); text-align:center; margin:6px 0; }
+  input[type=range] { width:100%; accent-color:var(--accent); }
+
+  /* ── HORARIOS EN RUTAS ── */
+  .horario-turno { display:grid; grid-template-columns:auto 1fr 1fr auto; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .horario-turno:last-child { border:none; }
+  .horario-turno label { display:flex; align-items:center; gap:6px; font-weight:500; white-space:nowrap; }
+  .horario-turno input[type=time] { background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:6px 8px; font-size:12px; width:100%; }
+  .horario-turno input[type=time]:focus { outline:none; border-color:var(--accent); }
+  .horario-section { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:10px; }
+  .horario-section-title { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; font-weight:600; }
+
   .import-box p  { font-size:12px; color:var(--muted); margin-bottom:12px; line-height:1.5; }
   /* ── MODAL MAPA ── */
   .modal-mapa-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:9998; align-items:center; justify-content:center; padding:16px; }
@@ -176,6 +193,7 @@
   <div class="tab on" onclick="showTab('tab-gps')">🗺️ GPS Vivo</div>
   <div class="tab"    onclick="showTab('tab-rutas')">🛣️ Rutas</div>
   <div class="tab"    onclick="showTab('tab-unidades')">🚌 Unidades</div>
+  <div class="tab"    onclick="showTab('tab-seguridad')">🔒 Seguridad</div>
   <div class="tab"    onclick="showTab('tab-links')">🔗 Links</div>
 </div>
 
@@ -215,6 +233,25 @@
   <div id="unidades-admin-list"><div class="empty"><div class="empty-icon">⏳</div><p>Cargando…</p></div></div>
 </div>
 
+
+<!-- SEGURIDAD -->
+<div class="tab-content" id="tab-seguridad">
+  <div class="exclusion-card">
+    <h3>🚫 Zona de exclusión — Plantel</h3>
+    <p>Haz clic en el mapa para colocar el punto central del plantel. Los colaboradores no verán la unidad cuando esté dentro del radio definido.</p>
+    <div id="mapa-exclusion"></div>
+    <div class="form-group" style="margin-bottom:8px;">
+      <label class="form-label">Radio de exclusión</label>
+      <div class="radio-display" id="radio-display">150 metros</div>
+      <input type="range" id="radio-slider" min="50" max="1000" step="10" value="150" oninput="actualizarRadio(this.value)">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px;"><span>50m</span><span>1000m</span></div>
+    </div>
+    <div id="exclusion-coords" style="font-size:12px;color:var(--muted);margin-bottom:12px;min-height:18px;"></div>
+    <button class="add-btn" style="width:100%;" onclick="guardarExclusion()">💾 Guardar zona de exclusión</button>
+    <div id="exclusion-status" style="font-size:12px;text-align:center;margin-top:8px;min-height:16px;"></div>
+  </div>
+</div>
+
 <!-- LINKS -->
 <div class="tab-content" id="tab-links">
   <div class="import-box">
@@ -249,12 +286,33 @@
       <input type="color" id="mr-color" value="#f97316" style="width:48px;height:40px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:none;">
     </div>
     <div class="form-group">
-      <label class="form-label">Horarios</label>
-      <div class="horarios-grid">
-        <label class="hor-check"><input type="checkbox" id="hor-6am"  value="6am"  checked> 🌅 6:00 AM</label>
-        <label class="hor-check"><input type="checkbox" id="hor-2pm"  value="2pm"  checked> ☀️ 2:00 PM</label>
-        <label class="hor-check"><input type="checkbox" id="hor-6pm"  value="6pm"> 🌆 6:00 PM</label>
-        <label class="hor-check"><input type="checkbox" id="hor-10pm" value="10pm" checked> 🌙 10:00 PM</label>
+      <label class="form-label">Horarios y ventanas de consulta GPS</label>
+      <div class="horario-section">
+        <div class="horario-section-title">Turno · Inicio consulta · Fin consulta · Activo</div>
+        <div class="horario-turno">
+          <label><input type="checkbox" id="hor-6am"  checked style="accent-color:var(--accent);"> 🌅 6:00 AM</label>
+          <input type="time" id="hor-6am-ini"  value="05:20" title="Inicio consulta">
+          <input type="time" id="hor-6am-fin"  value="06:05" title="Fin consulta">
+          <span style="font-size:10px;color:var(--muted);">GPS</span>
+        </div>
+        <div class="horario-turno">
+          <label><input type="checkbox" id="hor-2pm"  checked style="accent-color:var(--accent);"> ☀️ 2:00 PM</label>
+          <input type="time" id="hor-2pm-ini"  value="13:00" title="Inicio consulta">
+          <input type="time" id="hor-2pm-fin"  value="14:05" title="Fin consulta">
+          <span style="font-size:10px;color:var(--muted);">GPS</span>
+        </div>
+        <div class="horario-turno">
+          <label><input type="checkbox" id="hor-6pm"  style="accent-color:var(--accent);"> 🌆 6:00 PM</label>
+          <input type="time" id="hor-6pm-ini"  value="16:40" title="Inicio consulta">
+          <input type="time" id="hor-6pm-fin"  value="18:05" title="Fin consulta">
+          <span style="font-size:10px;color:var(--muted);">GPS</span>
+        </div>
+        <div class="horario-turno">
+          <label><input type="checkbox" id="hor-10pm" checked style="accent-color:var(--accent);"> 🌙 10:00 PM</label>
+          <input type="time" id="hor-10pm-ini" value="21:00" title="Inicio consulta">
+          <input type="time" id="hor-10pm-fin" value="22:05" title="Fin consulta">
+          <span style="font-size:10px;color:var(--muted);">GPS</span>
+        </div>
       </div>
     </div>
     <div class="form-group">
@@ -322,7 +380,7 @@ window.showTab = function(id) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   document.getElementById(id).classList.add('on');
-  ['tab-gps','tab-rutas','tab-unidades','tab-links'].forEach((t,i) => {
+  ['tab-gps','tab-rutas','tab-unidades','tab-seguridad','tab-links'].forEach((t,i) => {
     if(t===id) document.querySelectorAll('.tab')[i].classList.add('on');
   });
   if (id==='tab-links') renderLinks();
@@ -467,7 +525,13 @@ window.abrirModalRuta = function(id=null) {
   document.getElementById('mr-nombre').value = ruta?.nombre || '';
   document.getElementById('mr-color').value  = ruta?.color  || '#f97316';
   document.getElementById('mr-activa').checked = ruta ? ruta.activa : true;
-  ['6am','2pm','6pm','10pm'].forEach(h => document.getElementById('hor-'+h).checked = ruta ? ruta.horarios.includes(h) : h!=='6pm');
+  const defaults = { '6am':{ini:'05:20',fin:'06:05',activo:true}, '2pm':{ini:'13:00',fin:'14:05',activo:true}, '6pm':{ini:'16:40',fin:'18:05',activo:false}, '10pm':{ini:'21:00',fin:'22:05',activo:true} };
+  ['6am','2pm','6pm','10pm'].forEach(h => {
+    const v = ruta?.ventanas?.[h] || defaults[h];
+    document.getElementById('hor-'+h).checked = ruta ? ruta.horarios.includes(h) : defaults[h].activo;
+    if(document.getElementById('hor-'+h+'-ini')) document.getElementById('hor-'+h+'-ini').value = v.ini || defaults[h].ini;
+    if(document.getElementById('hor-'+h+'-fin')) document.getElementById('hor-'+h+'-fin').value = v.fin || defaults[h].fin;
+  });
   tmpParadas = ruta ? JSON.parse(JSON.stringify(ruta.paradas)) : [];
   renderParadasModal();
   abrirModal('modal-ruta');
@@ -502,9 +566,18 @@ window.borrarParadaTmp = function(i) { if(!confirm('¿Eliminar?'))return; tmpPar
 window.guardarRuta = async function() {
   const id=document.getElementById('mr-id').value||uid(), nombre=document.getElementById('mr-nombre').value.trim();
   if(!nombre){alert('El nombre es requerido');return;}
-  const horarios=['6am','2pm','6pm','10pm'].filter(h=>document.getElementById('hor-'+h).checked);
+  const turnosDisp = ['6am','2pm','6pm','10pm'];
+  const horarios = turnosDisp.filter(h=>document.getElementById('hor-'+h).checked);
+  // Ventanas de consulta GPS por turno
+  const ventanas = {};
+  turnosDisp.forEach(h => {
+    const ini = document.getElementById('hor-'+h+'-ini')?.value || '';
+    const fin = document.getElementById('hor-'+h+'-fin')?.value || '';
+    const activo = document.getElementById('hor-'+h)?.checked || false;
+    ventanas[h] = { ini, fin, activo };
+  });
   await dbSaveRuta({ id, nombre, color:document.getElementById('mr-color').value,
-    horarios:horarios.length?horarios:['6am'], paradas:tmpParadas,
+    horarios:horarios.length?horarios:['6am'], ventanas, paradas:tmpParadas,
     activa:document.getElementById('mr-activa').checked });
   cerrarModal('modal-ruta');
 };
