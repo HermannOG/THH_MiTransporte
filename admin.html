@@ -791,6 +791,72 @@ window.cerrarMapaAdmin = function() {
   document.getElementById('modal-mapa-bg').classList.remove('open');
 };
 
+// ─── ZONA DE EXCLUSIÓN ────────────────────────────────────────────────────────
+const FIRESTORE_REST_EXCL = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
+const FIREBASE_KEY_EXCL   = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
+
+let _mapaExcl    = null;
+let _markerExcl  = null;
+let _circuloExcl = null;
+let _exclData    = { lat: null, lng: null, radio: 150 };
+
+window.initMapaExclusion = function() {
+  if (_mapaExcl) { setTimeout(() => _mapaExcl.invalidateSize(), 100); return; }
+  const btnEl = document.getElementById('mapa-exclusion-btn');
+  const mapEl = document.getElementById('mapa-exclusion');
+  if (!mapEl) return;
+  if (btnEl) btnEl.style.display = 'none';
+  mapEl.style.cssText = 'display:block!important;height:280px!important;width:100%!important;';
+  _mapaExcl = L.map('mapa-exclusion', { center:[10.0,-84.12], zoom:14 });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OSM' }).addTo(_mapaExcl);
+  setTimeout(() => _mapaExcl.invalidateSize(), 300);
+  fetch(FIRESTORE_REST_EXCL + '/config/exclusion?key=' + FIREBASE_KEY_EXCL)
+    .then(r => r.ok ? r.json() : null).then(data => {
+      if (!data?.fields) return;
+      const lat = data.fields.lat?.doubleValue, lng = data.fields.lng?.doubleValue;
+      const radio = parseInt(data.fields.radio?.integerValue || 150);
+      if (lat && lng) {
+        _exclData = { lat, lng, radio };
+        document.getElementById('radio-slider').value = radio;
+        window.actualizarRadio(radio);
+        _ponerMarcadorExcl(lat, lng);
+        _mapaExcl.setView([lat, lng], 15);
+      }
+    }).catch(()=>{});
+  _mapaExcl.on('click', e => _ponerMarcadorExcl(e.latlng.lat, e.latlng.lng));
+};
+
+function _ponerMarcadorExcl(lat, lng) {
+  _exclData.lat = lat; _exclData.lng = lng;
+  const radio = _exclData.radio || 150;
+  if (_markerExcl)  _mapaExcl.removeLayer(_markerExcl);
+  if (_circuloExcl) _mapaExcl.removeLayer(_circuloExcl);
+  _markerExcl = L.marker([lat,lng],{icon:L.divIcon({html:'<div style="background:#ef4444;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.4);"></div>',iconSize:[16,16],iconAnchor:[8,8],className:''})}).addTo(_mapaExcl).bindPopup('🏭 Plantel · Radio: '+radio+'m');
+  _circuloExcl = L.circle([lat,lng],{radius:radio,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.15,weight:2}).addTo(_mapaExcl);
+  document.getElementById('exclusion-coords').textContent = lat.toFixed(5)+'° N, '+Math.abs(lng).toFixed(5)+'° W';
+}
+
+window.actualizarRadio = function(val) {
+  const r = parseInt(val);
+  _exclData.radio = r;
+  document.getElementById('radio-display').textContent = r + ' metros';
+  if (_circuloExcl && _exclData.lat) {
+    _mapaExcl.removeLayer(_circuloExcl);
+    _circuloExcl = L.circle([_exclData.lat,_exclData.lng],{radius:r,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.15,weight:2}).addTo(_mapaExcl);
+  }
+};
+
+window.guardarExclusion = async function() {
+  if (!_exclData.lat) { alert('Haz clic en el mapa para colocar el plantel primero'); return; }
+  const st = document.getElementById('exclusion-status');
+  st.textContent='⏳ Guardando…'; st.style.color='var(--muted)';
+  try {
+    const r = await fetch(FIRESTORE_REST_EXCL+'/config/exclusion?key='+FIREBASE_KEY_EXCL,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{lat:{doubleValue:_exclData.lat},lng:{doubleValue:_exclData.lng},radio:{integerValue:String(_exclData.radio)},activo:{booleanValue:true}}})});
+    st.textContent = r.ok ? '✅ Zona guardada' : '❌ Error al guardar';
+    st.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+  } catch(e) { st.textContent='❌ '+e.message; st.style.color='var(--red)'; }
+};
+
 </script>
 
 <script>
