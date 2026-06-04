@@ -207,6 +207,38 @@ import { dbGetRutas, dbGetRuta, dbGetUnidades, dbOnRutas, dbOnUnidades, dbOnGPS,
          paradaMasCercana, detectarTurno, turnoLabel,
          dbRegistrarConsulta, dbClearConsulta } from './db.js';
 
+
+// ─── ZONA DE EXCLUSIÓN ────────────────────────────────────────────────────────
+let _exclusionConfig = null;
+
+async function cargarExclusion() {
+  try {
+    const r = await fetch('https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents/config/exclusion?key=AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data?.fields) return;
+    _exclusionConfig = {
+      lat:    data.fields.lat?.doubleValue,
+      lng:    data.fields.lng?.doubleValue,
+      radio:  parseInt(data.fields.radio?.integerValue || 150),
+      activo: data.fields.activo?.booleanValue ?? false
+    };
+  } catch(e) {}
+}
+
+function dentroDeExclusion(lat, lng) {
+  if (!_exclusionConfig?.activo || !_exclusionConfig?.lat) return false;
+  const R = 6371000;
+  const dLat = (lat - _exclusionConfig.lat) * Math.PI / 180;
+  const dLng = (lng - _exclusionConfig.lng) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(_exclusionConfig.lat*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLng/2)**2;
+  const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return dist <= _exclusionConfig.radio;
+}
+
+cargarExclusion();
+setInterval(cargarExclusion, 5 * 60 * 1000); // recargar cada 5 min
+
 // ─── Estado global ─────────────────────────────────────────────────────────────
 let G = { ruta:null, turno:null, miParada:-1, unsubGPS:null, sesionId:null };
 let _lastGps = {};
@@ -307,6 +339,11 @@ function actualizarEstadoParadas(curStop, miIdx, paradas) {
 // ── Actualizar marcador de la unidad ─────────────────────────────────────────
 function actualizarMarcadorBus(lat, lng) {
   if (!mapa) return;
+  // Si está en zona de exclusión, ocultar el marcador
+  if (dentroDeExclusion(lat, lng)) {
+    if (markerBus) { mapa.removeLayer(markerBus); markerBus = null; }
+    return;
+  }
   if (!markerBus) {
     markerBus = L.marker([lat, lng], { icon:iconBus(), zIndexOffset:1000 }).addTo(mapa);
   } else {
@@ -543,7 +580,10 @@ function refreshTracker(gpsAll) {
   const title = document.getElementById('t-sp-title');
   const desc  = document.getElementById('t-sp-desc');
 
-  if (!gpsData) {
+  // Verificar zona de exclusión
+  const enExclusion = gpsData?.lat && dentroDeExclusion(gpsData.lat, gpsData.lng);
+
+  if (!gpsData || enExclusion) {
     sb.className = 'status-pill sb-off';
     icon.textContent  = '📡';
     title.textContent = 'Unidad sin señal';
