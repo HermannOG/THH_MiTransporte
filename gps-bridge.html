@@ -161,15 +161,55 @@ const VEHICULOS = {
   '4273350389036195840': { sufijo:'63', unitId:'U02', rutaId:'san-rafael' },
 };
 
-// ─── HORARIOS DE CONSULTA ─────────────────────────────────────────────────────
-// Cada turno: [horaInicio_minutos, horaFin_minutos]
-// en minutos desde medianoche para facilitar comparación
-const TURNOS = [
-  { nombre:'6am',  inicio: 5*60+20, fin: 6*60+5  }, // 5:20 AM → 6:05 AM
-  { nombre:'2pm',  inicio:13*60+0,  fin:14*60+5  }, // 1:00 PM → 2:05 PM
-  { nombre:'6pm',  inicio:16*60+40, fin:18*60+5  }, // 4:40 PM → 6:05 PM
-  { nombre:'10pm', inicio:21*60+0,  fin:22*60+5  }, // 9:00 PM → 10:05 PM
+// ─── HORARIOS DE CONSULTA (se leen de Firebase por ruta) ──────────────────────
+// Valores por defecto — se sobrescriben con los datos de Firebase
+let _horariosPorRuta = {};
+
+const TURNOS_DEFAULT = [
+  { nombre:'6am',  inicio: 5*60+20, fin: 6*60+5  },
+  { nombre:'2pm',  inicio:13*60+0,  fin:14*60+5  },
+  { nombre:'6pm',  inicio:16*60+40, fin:18*60+5  },
+  { nombre:'10pm', inicio:21*60+0,  fin:22*60+5  },
 ];
+
+// Convertir "HH:MM" a minutos desde medianoche
+function timeToMin(t) {
+  if (!t) return 0;
+  const [h,m] = t.split(':').map(Number);
+  return h*60 + m;
+}
+
+// Obtener turnos activos para una ruta específica
+function getTurnosRuta(rutaId) {
+  const ventanas = _horariosPorRuta[rutaId];
+  if (!ventanas) return TURNOS_DEFAULT;
+  return ['6am','2pm','6pm','10pm']
+    .filter(n => ventanas[n]?.activo)
+    .map(n => ({
+      nombre: n,
+      inicio: timeToMin(ventanas[n].ini),
+      fin:    timeToMin(ventanas[n].fin)
+    }));
+}
+
+// TURNOS globales (para el badge y display general)
+// Usa la unión de todos los turnos de todas las rutas
+function getTurnosGlobales() {
+  const todos = Object.values(_horariosPorRuta);
+  if (!todos.length) return TURNOS_DEFAULT;
+  const resultado = [];
+  ['6am','2pm','6pm','10pm'].forEach(n => {
+    const activo = todos.some(v => v[n]?.activo);
+    if (activo) {
+      const inicios = todos.filter(v=>v[n]?.activo).map(v=>timeToMin(v[n].ini));
+      const fines   = todos.filter(v=>v[n]?.activo).map(v=>timeToMin(v[n].fin));
+      resultado.push({ nombre:n, inicio:Math.min(...inicios), fin:Math.max(...fines) });
+    }
+  });
+  return resultado.length ? resultado : TURNOS_DEFAULT;
+}
+
+const TURNOS = { get length() { return getTurnosGlobales().length; }, find: (fn) => getTurnosGlobales().find(fn) };
 
 function minutosActuales() {
   const ahora = new Date();
@@ -178,20 +218,25 @@ function minutosActuales() {
 
 function turnoActivo() {
   const m = minutosActuales();
-  return TURNOS.find(t => m >= t.inicio && m <= t.fin) || null;
+  return getTurnosGlobales().find(t => m >= t.inicio && m <= t.fin) || null;
+}
+
+function turnoActivoParaRuta(rutaId) {
+  const m = minutosActuales();
+  return getTurnosRuta(rutaId).find(t => m >= t.inicio && m <= t.fin) || null;
 }
 
 function proximoTurno() {
   const m = minutosActuales();
   // Buscar el siguiente turno que no haya empezado
-  const siguiente = TURNOS.find(t => t.inicio > m);
+  const siguiente = getTurnosGlobales().find(t => t.inicio > m);
   if (siguiente) {
     const mins = siguiente.inicio - m;
     const h = Math.floor(mins / 60), min = mins % 60;
     return `⏳ Próximo turno (${siguiente.nombre}): en ${h > 0 ? h+'h ' : ''}${min} min`;
   }
   // Si ya pasaron todos los turnos de hoy, el primero de mañana
-  const primero = TURNOS[0];
+  const primero = getTurnosGlobales()[0];
   const minsHastaMañana = (24*60 - m) + primero.inicio;
   const h = Math.floor(minsHastaMañana/60), min = minsHastaMañana%60;
   return `⏳ Próximo turno mañana (${primero.nombre}): en ${h}h ${min}min`;
@@ -284,7 +329,14 @@ setInterval(sincronizarTokenExtension, 2 * 60 * 1000);
 // ─── RUTAS DE FIREBASE ────────────────────────────────────────────────────────
 onSnapshot(collection(db, 'rutas'), snap => {
   _rutasCache = {};
-  snap.forEach(d => { _rutasCache[d.id] = d.data(); });
+  snap.forEach(d => {
+    const data = d.data();
+    _rutasCache[d.id] = data;
+    // Cargar ventanas horarias de esta ruta
+    if (data.ventanas) {
+      _horariosPorRuta[d.id] = data.ventanas;
+    }
+  });
   const ids = Object.keys(_rutasCache);
   log('Rutas en Firebase: ' + ids.join(', '), 'info');
   Object.values(VEHICULOS).forEach(v => {
@@ -344,6 +396,12 @@ const _gpsIndex = {};
 
 // ─── CONSULTAR VEHÍCULO ───────────────────────────────────────────────────────
 async function consultarVehiculo(vid, vehic, token) {
+  // Verificar si esta ruta específica tiene un turno activo
+  const horariosActivos = document.getElementById('toggle-horarios')?.checked !== false;
+  if (horariosActivos && !turnoActivoParaRuta(vehic.rutaId)) {
+    log('HB42' + vehic.sufijo + ': fuera de horario para esta ruta', 'info');
+    return;
+  }
   const url = 'https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment?gpsIndex=' + (_gpsIndex[vid]||'0') + '&reqId=' + reqId() + '&vehicleId=' + vid;
   try {
     const r = await fetch(url, {
