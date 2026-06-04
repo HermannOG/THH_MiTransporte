@@ -209,7 +209,8 @@ function getTurnosGlobales() {
   return resultado.length ? resultado : TURNOS_DEFAULT;
 }
 
-const TURNOS = { get length() { return getTurnosGlobales().length; }, find: (fn) => getTurnosGlobales().find(fn) };
+// TURNOS es ahora solo un alias para facilitar compatibilidad
+function TURNOS_get() { return getTurnosGlobales(); }
 
 function minutosActuales() {
   const ahora = new Date();
@@ -245,7 +246,7 @@ function proximoTurno() {
 function actualizarHorarioUI() {
   const m = minutosActuales();
   const activo = turnoActivo();
-  TURNOS.forEach(t => {
+  getTurnosGlobales().forEach(t => {
     const el = document.getElementById('h-' + t.nombre);
     if (!el) return;
     if (activo && activo.nombre === t.nombre) {
