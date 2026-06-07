@@ -401,10 +401,11 @@ function reqId() { return 'bt'+Math.random().toString(36).slice(2,8); }
 const _gpsIndex = {};
 
 // ─── CONSULTAR VEHÍCULO ───────────────────────────────────────────────────────
-async function consultarVehiculo(vid, vehic, token) {
+async function consultarVehiculo(vid, vehic, token, forzar=false) {
   // Verificar si esta ruta específica tiene un turno activo
+  // Si forzar=true (solicitud desde Admin), saltarse la verificación de horario
   const horariosActivos = document.getElementById('toggle-horarios')?.checked !== false;
-  if (horariosActivos && !turnoActivoParaRuta(vehic.rutaId)) {
+  if (!forzar && horariosActivos && !turnoActivoParaRuta(vehic.rutaId)) {
     log('HB42' + vehic.sufijo + ': fuera de horario para esta ruta', 'info');
     return;
   }
@@ -540,7 +541,7 @@ window.iniciar = async function() {
 
 window.detener = async function() {
   if (_iv){clearInterval(_iv);_iv=null;}
-  try{await deleteDoc(doc(db,'gps','U01'));await deleteDoc(doc(db,'gps','U02'));}catch(e){}
+  // No borrar GPS para conservar la última posición conocida
   document.getElementById('btn-start').style.display='block';
   document.getElementById('btn-stop').style.display='none';
   document.getElementById('badge').textContent='Inactivo'; document.getElementById('badge').className='badge';
@@ -570,7 +571,7 @@ async function verificarSolicitudes() {
       log('📍 Solicitud de ubicación recibida para ' + vehic.unitId, 'info');
       const token = document.getElementById('token').value.trim();
       if (token) {
-        await consultarVehiculo(vid, vehic, token);
+        await consultarVehiculo(vid, vehic, token, true); // forzar=true: ignorar horario
         // Borrar la solicitud
         await fetch(url, { method:'DELETE' });
         log('✅ Solicitud procesada para ' + vehic.unitId, 'ok');
