@@ -475,10 +475,7 @@ function refreshGPS() {
         <div style="margin-top:10px;">${stopsHtml}</div>
         <div class="ulc-coords">${g.lat.toFixed(4)}° N, ${Math.abs(g.lng).toFixed(4)}° W</div>
         <div class="ulc-ts">Actualizado ${sinceStr}</div>
-        <div style="display:flex;gap:6px;margin-top:10px;">
-          <button onclick="verMapaUnidad('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(249,115,22,.3);background:rgba(249,115,22,.08);color:var(--accent);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver mapa</button>
-          <button id="sol-btn-${u.id}" onclick="solicitarUbicacion('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--blue);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">📍 Ver ahora</button>
-        </div>
+        <button onclick="verMapaUnidad('${u.id}')" style="margin-top:10px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(249,115,22,.3);background:rgba(249,115,22,.08);color:var(--accent);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver mapa</button>
       </div>`;
   }).join('');
 }
