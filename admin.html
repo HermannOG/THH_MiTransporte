@@ -895,6 +895,64 @@ window.verMapaUnidad = function(unitId) {
   }, 150);
 };
 
+
+// ─── SOLICITUD DE UBICACIÓN PUNTUAL ──────────────────────────────────────────
+const FIRESTORE_SOL = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
+const FIREBASE_SOL_KEY = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
+
+window.solicitarUbicacion = async function(unitId) {
+  const btn = event.target;
+  const textoOriginal = btn.textContent;
+  btn.textContent = '⏳ Solicitando…';
+  btn.disabled = true;
+
+  try {
+    // Escribir solicitud en Firebase
+    const url  = FIRESTORE_SOL + '/solicitudes/' + unitId + '?key=' + FIREBASE_SOL_KEY;
+    const body = { fields: {
+      solicitado: { booleanValue: true },
+      ts:         { integerValue: String(Date.now()) },
+      unitId:     { stringValue: unitId }
+    }};
+    await fetch(url, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+
+    // Esperar respuesta — el bridge la procesa y borra la solicitud
+    // Monitorear el doc de GPS de esta unidad por cambios
+    let intentos = 0;
+    const tsAntes = Date.now();
+    const esperar = setInterval(async () => {
+      intentos++;
+      try {
+        const r = await fetch(FIRESTORE_SOL + '/gps/' + unitId + '?key=' + FIREBASE_SOL_KEY);
+        if (r.ok) {
+          const data = await r.json();
+          const ts = parseInt(data?.fields?.ts?.integerValue || 0);
+          if (ts > tsAntes) {
+            clearInterval(esperar);
+            btn.textContent = '✅ Actualizado';
+            btn.disabled = false;
+            setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
+            // Refrescar el GPS en el admin
+            refreshGPS();
+            return;
+          }
+        }
+      } catch(e) {}
+      if (intentos >= 15) { // timeout 15s
+        clearInterval(esperar);
+        btn.textContent = '❌ Sin respuesta';
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
+      }
+    }, 1000);
+
+  } catch(e) {
+    btn.textContent = '❌ Error';
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
+  }
+};
+
 window.cerrarMapaAdmin = function() {
   document.getElementById('modal-mapa-bg').classList.remove('open');
 };
