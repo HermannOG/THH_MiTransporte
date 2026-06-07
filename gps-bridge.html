@@ -574,6 +574,11 @@ async function verificarSolicitudes() {
         await consultarVehiculo(vid, vehic, token, true); // forzar=true: ignorar horario
         // Borrar la solicitud
         await fetch(url, { method:'DELETE' });
+        // Marcar el GPS como 'puntual' para que el admin no lo muestre como activo
+        try {
+          const gpsUrl = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents/gps/' + vehic.unitId + '?key=AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM&updateMask.fieldPaths=estado';
+          await fetch(gpsUrl, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fields:{estado:{stringValue:'puntual'}}}) });
+        } catch(e) {}
         log('✅ Solicitud procesada para ' + vehic.unitId, 'ok');
       }
     } catch(e) {}
