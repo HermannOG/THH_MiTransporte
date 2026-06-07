@@ -419,7 +419,7 @@ function refreshGPS() {
 
   grid.innerHTML = list.map(u => {
     const g = _gps[u.id], ruta = rutas[u.ruta];
-    const isOk = g && (now - g.ts < 60000);
+    const isOk = g && (now - g.ts < 60000) && g.estado !== 'puntual';
     if (!isOk) {
       // Mostrar última posición conocida aunque esté apagada
       const tieneUltima = g && g.lat && g.lng;
