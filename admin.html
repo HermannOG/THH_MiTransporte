@@ -476,8 +476,8 @@ function refreshGPS() {
         <div class="ulc-coords">${g.lat.toFixed(4)}° N, ${Math.abs(g.lng).toFixed(4)}° W</div>
         <div class="ulc-ts">Actualizado ${sinceStr}</div>
         <div style="display:flex;gap:6px;margin-top:10px;">
-          <button onclick="consultaManual('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--blue);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">📍 Actualizar</button>
           <button onclick="verMapaUnidad('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(249,115,22,.3);background:rgba(249,115,22,.08);color:var(--accent);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver mapa</button>
+          <button id="sol-btn-${u.id}" onclick="solicitarUbicacion('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--blue);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">📍 Ver ahora</button>
         </div>
       </div>`;
   }).join('');
@@ -938,8 +938,9 @@ window.solicitarUbicacion = async function(unitId) {
             btn.textContent = '✅ Actualizado';
             btn.disabled = false;
             setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
-            // Refrescar el GPS en el admin
+            // Refrescar el GPS y abrir el mapa con la nueva posición
             refreshGPS();
+            setTimeout(() => verMapaUnidad(unitId), 500);
             return;
           }
         }
