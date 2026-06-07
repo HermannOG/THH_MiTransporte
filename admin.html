@@ -704,6 +704,8 @@ window.abrirModal  = id => document.getElementById(id).classList.add('open');
 window.cerrarModal = id => document.getElementById(id).classList.remove('open');
 
 init();
+// Refrescar display de GPS cada 60 segundos para actualizar "hace X min"
+setInterval(() => { if (Object.keys(_gps).length) refreshGPS(); }, 30000);
 
 // ─── CONSULTA MANUAL (una sola petición al API sin importar horario) ──────────
 const TENANT_ID_ADM = '742';
