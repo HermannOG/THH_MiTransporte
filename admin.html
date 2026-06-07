@@ -445,8 +445,14 @@ function refreshGPS() {
             <div style="font-size:11px;color:var(--accent);margin:8px 0 4px;font-weight:600;">📍 Última posición conocida · ${cuandoStr}</div>
             <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;">📌 ${ultimaParada}</div>
             <div style="font-family:monospace;font-size:11px;color:var(--muted);">${g.lat.toFixed(4)}° N, ${Math.abs(g.lng).toFixed(4)}° W</div>
-            <button onclick="verMapaUnidad('${u.id}')" style="margin-top:10px;width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver última posición</button>
-          ` : `<div style="font-size:12px;color:var(--muted);text-align:center;padding:10px 0;">📡 Sin datos GPS registrados</div>`}
+            <div style="display:flex;gap:8px;margin-top:10px;">
+              <button onclick="verMapaUnidad('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver última posición</button>
+              <button id="sol-btn-${u.id}" onclick="solicitarUbicacion('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--blue);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">📍 Ver ahora</button>
+            </div>
+          ` : `
+            <div style="font-size:12px;color:var(--muted);text-align:center;padding:10px 0;">📡 Sin datos GPS registrados</div>
+            <button id="sol-btn-${u.id}" onclick="solicitarUbicacion('${u.id}')" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--blue);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">📍 Ver ubicación ahora</button>
+          `}
         </div>`;
     }
     const paradas=ruta?.paradas||[], stopIdx=g.stopIdx;
@@ -901,7 +907,7 @@ const FIRESTORE_SOL = 'https://firestore.googleapis.com/v1/projects/busetatrack/
 const FIREBASE_SOL_KEY = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
 
 window.solicitarUbicacion = async function(unitId) {
-  const btn = event.target;
+  const btn = document.getElementById('sol-btn-' + unitId) || event.target;
   const textoOriginal = btn.textContent;
   btn.textContent = '⏳ Solicitando…';
   btn.disabled = true;
