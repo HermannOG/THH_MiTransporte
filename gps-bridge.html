@@ -294,6 +294,7 @@ function verificarCambioTurno() {
 let _iv         = null;
 let _rutasCache = {};
 const _stopActual = { U01: 0, U02: 0 };
+let _gpsLimpiado = false; // para no borrar Firebase en cada ciclo
 
 // ─── LEER TOKEN DE FIREBASE ───────────────────────────────────────────────────
 const FIRESTORE_REST = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
@@ -477,12 +478,25 @@ async function consultar() {
   const turnoEnCurso = turnoActivo();
 
   if (horariosActivos && !turnoEnCurso) {
-    // Fuera de horario y con control de horarios activado — no consultar API
-    log('⏸ Fuera de horario, esperando próximo turno…','info');
+    // Fuera de horario — borrar GPS de Firebase si aún no lo hemos borrado
+    if (!_gpsLimpiado) {
+      _gpsLimpiado = true;
+      log('⏸ Fuera de horario — limpiando GPS de Firebase…', 'info');
+      Object.values(VEHICULOS).forEach(async v => {
+        try {
+          await deleteDoc(doc(db, 'gps', v.unitId));
+          log('🗑 GPS de ' + v.unitId + ' eliminado', 'info');
+        } catch(e) {}
+      });
+    } else {
+      log('⏸ Fuera de horario, esperando próximo turno…', 'info');
+    }
     const b = document.getElementById('badge');
     if (b.textContent !== 'Pausado') { b.textContent='Pausado'; b.className='badge pause'; }
     return;
   }
+  // En horario — resetear flag de limpieza
+  _gpsLimpiado = false;
 
   // En horario (o control desactivado) — consultar normalmente
   const b = document.getElementById('badge');
@@ -538,6 +552,36 @@ window.detener = async function() {
 window.toggleDebug=function(){const b=document.getElementById('debug-box');b.style.display=b.style.display==='none'?'block':'none';};
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+
+// ─── SOLICITUDES DE UBICACIÓN PUNTUAL (desde Admin) ──────────────────────────
+const FIRESTORE_SOL_BRIDGE = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
+const FIREBASE_SOL_BRIDGE_KEY = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
+
+async function verificarSolicitudes() {
+  for (const [vid, vehic] of Object.entries(VEHICULOS)) {
+    try {
+      const url = FIRESTORE_SOL_BRIDGE + '/solicitudes/' + vehic.unitId + '?key=' + FIREBASE_SOL_BRIDGE_KEY;
+      const r   = await fetch(url);
+      if (!r.ok) continue;
+      const data = await r.json();
+      if (!data?.fields?.solicitado?.booleanValue) continue;
+
+      // Hay una solicitud pendiente — hacer UNA llamada al API
+      log('📍 Solicitud de ubicación recibida para ' + vehic.unitId, 'info');
+      const token = document.getElementById('token').value.trim();
+      if (token) {
+        await consultarVehiculo(vid, vehic, token);
+        // Borrar la solicitud
+        await fetch(url, { method:'DELETE' });
+        log('✅ Solicitud procesada para ' + vehic.unitId, 'ok');
+      }
+    } catch(e) {}
+  }
+}
+
+// Revisar solicitudes cada 5 segundos (independiente del horario)
+setInterval(verificarSolicitudes, 5000);
+
 const saved=localStorage.getItem('bt_pf_token');
 if(saved){document.getElementById('token').value=saved;document.getElementById('token-info').textContent='✅ Token previo cargado';log('Token previo encontrado','info');}
 document.getElementById('token').addEventListener('input',e=>{const v=e.target.value.trim();document.getElementById('token-info').textContent=v.length>50?'✅ Token válido ('+v.length+' chars)':'⚠️ Token muy corto';});
