@@ -479,25 +479,12 @@ async function consultar() {
   const turnoEnCurso = turnoActivo();
 
   if (horariosActivos && !turnoEnCurso) {
-    // Fuera de horario — borrar GPS de Firebase si aún no lo hemos borrado
-    if (!_gpsLimpiado) {
-      _gpsLimpiado = true;
-      log('⏸ Fuera de horario — limpiando GPS de Firebase…', 'info');
-      Object.values(VEHICULOS).forEach(async v => {
-        try {
-          await deleteDoc(doc(db, 'gps', v.unitId));
-          log('🗑 GPS de ' + v.unitId + ' eliminado', 'info');
-        } catch(e) {}
-      });
-    } else {
-      log('⏸ Fuera de horario, esperando próximo turno…', 'info');
-    }
+    log('⏸ Fuera de horario, esperando próximo turno…', 'info');
     const b = document.getElementById('badge');
     if (b.textContent !== 'Pausado') { b.textContent='Pausado'; b.className='badge pause'; }
     return;
   }
   // En horario — resetear flag de limpieza
-  _gpsLimpiado = false;
 
   // En horario (o control desactivado) — consultar normalmente
   const b = document.getElementById('badge');
@@ -576,8 +563,10 @@ async function verificarSolicitudes() {
         await fetch(url, { method:'DELETE' });
         // Marcar el GPS como 'puntual' para que el admin no lo muestre como activo
         try {
-          const gpsUrl = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents/gps/' + vehic.unitId + '?key=AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM&updateMask.fieldPaths=estado';
-          await fetch(gpsUrl, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({fields:{estado:{stringValue:'puntual'}}}) });
+          const gpsRef = doc(db, 'gps', vehic.unitId);
+          const snap   = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+          // Usar setDoc con merge para solo actualizar el campo estado
+          await setDoc(gpsRef, { estado: 'puntual' }, { merge: true });
         } catch(e) {}
         log('✅ Solicitud procesada para ' + vehic.unitId, 'ok');
       }
