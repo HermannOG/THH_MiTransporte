@@ -469,7 +469,10 @@ function refreshGPS() {
         <div style="margin-top:10px;">${stopsHtml}</div>
         <div class="ulc-coords">${g.lat.toFixed(4)}° N, ${Math.abs(g.lng).toFixed(4)}° W</div>
         <div class="ulc-ts">Actualizado ${sinceStr}</div>
-        <button onclick="verMapaUnidad('${u.id}')" style="margin-top:10px;width:100%;padding:8px;border-radius:8px;border:1px solid rgba(249,115,22,.3);background:rgba(249,115,22,.08);color:var(--accent);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver mapa</button>
+        <div style="display:flex;gap:6px;margin-top:10px;">
+          <button onclick="consultaManual('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--blue);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">📍 Actualizar</button>
+          <button onclick="verMapaUnidad('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(249,115,22,.3);background:rgba(249,115,22,.08);color:var(--accent);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver mapa</button>
+        </div>
       </div>`;
   }).join('');
 }
@@ -699,6 +702,111 @@ window.cerrarModal = id => document.getElementById(id).classList.remove('open');
 
 init();
 
+// ─── CONSULTA MANUAL (una sola petición al API sin importar horario) ──────────
+const TENANT_ID_ADM = '742';
+const APP_ID_ADM    = '10001';
+
+// IDs de Powerfleet por unitId
+const POWERFLEET_IDS = {
+  'U01': '4273350242566909952',
+  'U02': '4273350389036195840',
+};
+const _gpsIndexAdm = {};
+
+window.consultaManual = async function(unitId) {
+  // Leer token de Firebase (sincronizado por la extensión)
+  let token = '';
+  try {
+    const r = await fetch('https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents/bridge/token?key=AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM');
+    if (r.ok) {
+      const data = await r.json();
+      token = data?.fields?.token?.stringValue || '';
+    }
+  } catch(e) {}
+
+  if (!token) { alert('No hay token disponible. Asegúrate de que el bridge o la extensión estén activos.'); return; }
+
+  const vid = POWERFLEET_IDS[unitId];
+  if (!vid) { alert('Unidad no reconocida: ' + unitId); return; }
+
+  const unidades = dbGetUnidades();
+  const rutas    = dbGetRutas();
+  const u        = unidades[unitId];
+  const ruta     = u ? rutas[u.ruta] : null;
+
+  // Mostrar estado de carga en el botón
+  const btns = document.querySelectorAll(`[onclick="consultaManual('${unitId}')"]`);
+  btns.forEach(b => { b.textContent = '⏳ Consultando…'; b.disabled = true; });
+
+  try {
+    const reqId = 'bt' + Math.random().toString(36).slice(2,8);
+    const gpsIdx = _gpsIndexAdm[vid] || '0';
+    const url = `https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment?gpsIndex=${gpsIdx}&reqId=${reqId}&vehicleId=${vid}`;
+
+    const r = await fetch(url, {
+      method: 'GET',
+      headers: { '_token': token, '_tenantid': TENANT_ID_ADM, '_appid': APP_ID_ADM, '_langtype': 'es_ES', 'Accept': 'application/json, text/plain, */*' }
+    });
+
+    if (!r.ok) { alert('Error al consultar: HTTP ' + r.status); return; }
+
+    const json = await r.json();
+    if (!json.success || !json.data) { alert('Sin datos del API'); return; }
+    if (json.data.gpsIndex) _gpsIndexAdm[vid] = json.data.gpsIndex;
+
+    const lista = (json.data.gpsList || []).filter(i => String(i.vid) === String(vid));
+    if (!lista.length) { alert('La unidad no reportó ubicación'); return; }
+
+    const item = lista[lista.length - 1];
+    const lat  = item.lat / 1000000;
+    const lng  = item.lng / 1000000;
+
+    if (lat < 8 || lat > 11 || lng < -86 || lng > -82) { alert('Coordenadas fuera de Costa Rica'); return; }
+
+    // Mostrar en el mapa admin
+    const nombre = u?.nombre || unitId;
+    const placa  = u?.placa  || '';
+    document.getElementById('modal-mapa-title').textContent = nombre + ' · ' + (ruta?.nombre || '') + ' · Consulta manual';
+    document.getElementById('modal-mapa-bg').classList.add('open');
+
+    setTimeout(() => {
+      if (!_adminMapa) {
+        _adminMapa = L.map('admin-mapa', { zoomControl:true, attributionControl:true });
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(_adminMapa);
+      }
+      _adminMarkers.forEach(m => _adminMapa.removeLayer(m));
+      _adminMarkers = [];
+
+      // Marcador de la unidad
+      const mBus = L.marker([lat, lng], {
+        icon: L.divIcon({ html:`<div style="background:#f97316;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);">🚌</div>`, iconSize:[36,36], iconAnchor:[18,18], className:'' }),
+        zIndexOffset:1000
+      }).addTo(_adminMapa).bindPopup(`<b>🚌 ${nombre}</b><br>Placa: ${placa}<br>${lat.toFixed(5)}° N, ${Math.abs(lng).toFixed(5)}° W<br><small>Consulta manual</small>`);
+      mBus.openPopup();
+      _adminMarkers.push(mBus);
+
+      // Paradas de la ruta
+      if (ruta?.paradas?.length) {
+        ruta.paradas.forEach((p, i) => {
+          const m = L.marker([p.lat, p.lng], {
+            icon: L.divIcon({ html:`<div style="background:#22c55e;width:10px;height:10px;border-radius:50%;border:2px solid white;"></div>`, iconSize:[10,10], iconAnchor:[5,5], className:'' })
+          }).addTo(_adminMapa).bindPopup(`<b>${p.nombre}</b><br><small>${p.detalle}</small>`);
+          _adminMarkers.push(m);
+        });
+      }
+
+      const bounds = [[lat, lng]];
+      if (ruta?.paradas?.length) ruta.paradas.forEach(p => bounds.push([p.lat, p.lng]));
+      _adminMapa.fitBounds(L.latLngBounds(bounds), { padding:[30,30], maxZoom:15 });
+      _adminMapa.invalidateSize();
+    }, 150);
+
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally {
+    btns.forEach(b => { b.textContent = '📍 Ver ubicación actual'; b.disabled = false; });
+  }
+};
 
 // ─── MAPA ADMIN ──────────────────────────────────────────────────────────────
 let _adminMapa = null;
