@@ -22,11 +22,11 @@
   .login-sub   { font-size:13px; color:var(--muted); margin-bottom:32px; }
   .login-input-wrap { position:relative; width:100%; margin-bottom:12px; }
   .login-input {
-    width:100%; padding:16px 48px 16px 18px;
+    width:100%; padding:14px 18px;
     border-radius:14px; border:1px solid var(--border);
     background:var(--surface); color:var(--text);
-    font-family:'DM Sans',sans-serif; font-size:20px; letter-spacing:6px;
-    text-align:center; transition:border-color .2s;
+    font-family:'DM Sans',sans-serif; font-size:15px; letter-spacing:0;
+    transition:border-color .2s; box-sizing:border-box;
   }
   .login-input:focus { outline:none; border-color:var(--purple); }
   .login-input.error { border-color:var(--red); animation:shake .3s ease; }
@@ -38,6 +38,7 @@
     transition:all .2s; margin-top:4px;
   }
   .login-btn:hover { opacity:.9; transform:translateY(-1px); }
+  .login-btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
   .login-error { font-size:13px; color:var(--red); margin-top:10px; min-height:20px; text-align:center; }
   .login-footer { font-size:11px; color:var(--muted); margin-top:20px; text-align:center; line-height:1.5; }
 
@@ -45,6 +46,8 @@
   .admin-logo  { font-size:24px; }
   .admin-title { font-family:'Syne',sans-serif; font-weight:800; font-size:18px; }
   .admin-badge { background:rgba(168,85,247,.15); border:1px solid rgba(168,85,247,.3); color:var(--purple); font-size:11px; font-weight:700; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:1px; margin-left:auto; }
+  .logout-btn  { background:none; border:1px solid var(--border); color:var(--muted); font-size:12px; padding:5px 12px; border-radius:8px; cursor:pointer; transition:all .15s; }
+  .logout-btn:hover { color:var(--red); border-color:var(--red); }
   .tabs { background:var(--surface); border-bottom:1px solid var(--border); display:flex; }
   .tab  { flex:1; padding:14px 8px; text-align:center; font-size:13px; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; transition:all .2s; font-family:'Syne',sans-serif; }
   .tab.on { color:var(--accent); border-bottom-color:var(--accent); }
@@ -130,6 +133,7 @@
 
   .import-box { background:rgba(249,115,22,.08); border:1px solid rgba(249,115,22,.3); border-radius:14px; padding:16px; margin-bottom:20px; }
   .import-box h4 { font-family:'Syne',sans-serif; font-weight:700; margin-bottom:6px; font-size:14px; color:var(--accent); }
+  .import-box p  { font-size:12px; color:var(--muted); margin-bottom:12px; line-height:1.5; }
   /* ── SEGURIDAD ── */
   #mapa-exclusion { height:280px !important; width:100% !important; border-radius:12px; overflow:hidden; border:1px solid var(--border); margin-bottom:12px; display:block; }
   .exclusion-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; }
@@ -147,7 +151,6 @@
   .horario-section { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; margin-top:10px; }
   .horario-section-title { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; font-weight:600; }
 
-  .import-box p  { font-size:12px; color:var(--muted); margin-bottom:12px; line-height:1.5; }
   /* ── MODAL MAPA ── */
   .modal-mapa-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); z-index:9998; align-items:center; justify-content:center; padding:16px; }
   .modal-mapa-bg.open { display:flex; }
@@ -160,11 +163,9 @@
   .modal-mapa-info { padding:10px 16px; border-top:1px solid var(--border); display:flex; gap:16px; flex-wrap:wrap; }
   .mmi-item { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
   .mmi-dot  { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-
 </style>
 </head>
 <body>
-
 
 <!-- ══ LOGIN ══ -->
 <div id="login-screen" class="visible">
@@ -173,11 +174,16 @@
     <div class="login-title">BusetaTrack</div>
     <div class="login-sub">Panel de administración</div>
     <div class="login-input-wrap">
+      <input class="login-input" id="login-email" type="email"
+        placeholder="correo@ejemplo.com"
+        onkeydown="if(event.key==='Enter')document.getElementById('login-pwd').focus()">
+    </div>
+    <div class="login-input-wrap">
       <input class="login-input" id="login-pwd" type="password"
-        placeholder="· · · ·" maxlength="20"
+        placeholder="Contraseña"
         onkeydown="if(event.key==='Enter')verificarClave()">
     </div>
-    <button class="login-btn" onclick="verificarClave()">🔐 Ingresar</button>
+    <button class="login-btn" id="login-btn" onclick="verificarClave()">🔐 Ingresar</button>
     <div class="login-error" id="login-error"></div>
     <div class="login-footer">Acceso restringido · Solo administradores</div>
   </div>
@@ -187,6 +193,7 @@
   <span class="admin-logo">⚙️</span>
   <div><div class="admin-title">BusetaTrack Admin</div><div style="font-size:11px;color:var(--muted);">Panel de administración</div></div>
   <span class="admin-badge">Admin</span>
+  <button class="logout-btn" onclick="cerrarSesion()">Salir</button>
 </div>
 
 <div class="tabs">
@@ -233,7 +240,6 @@
   <div id="unidades-admin-list"><div class="empty"><div class="empty-icon">⏳</div><p>Cargando…</p></div></div>
 </div>
 
-
 <!-- SEGURIDAD -->
 <div class="tab-content" id="tab-seguridad">
   <div class="exclusion-card">
@@ -272,7 +278,6 @@
   <div class="sec-label">URLs de acceso</div>
   <div class="links-box">
     <div class="link-row"><div class="link-label">👤 Colaboradores</div><div class="link-url" id="url-emp">—</div><button class="copy-btn" onclick="copyLink('url-emp')">Copiar</button></div>
-    
     <div class="link-row"><div class="link-label">⚙️ Admin</div><div class="link-url" id="url-admin">—</div><button class="copy-btn" onclick="copyLink('url-admin')">Copiar</button></div>
   </div>
   <div class="bottom-note">Comparte <strong>Colaboradores</strong> con los trabajadores.<br><strong>Conductor</strong> va en el celular de cada buseta.<br>Guarda <strong>Admin</strong> solo para ti.</div>
@@ -373,11 +378,70 @@
 </div>
 
 <script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { dbGetRutas, dbGetRuta, dbSaveRuta, dbDeleteRuta,
          dbGetUnidades, dbSaveUnidad, dbDeleteUnidad,
          dbOnRutas, dbOnUnidades, dbOnGPS, dbOnConsultas,
          dbImportarConfig, turnoLabel, uid } from './db.js';
 
+// ─── FIREBASE AUTH ────────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            "AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM",
+  authDomain:        "busetatrack.firebaseapp.com",
+  projectId:         "busetatrack",
+  storageBucket:     "busetatrack.firebasestorage.app",
+  messagingSenderId: "420499514925",
+  appId:             "1:420499514925:web:3da3d96515656389847aa4"
+};
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+function mostrarAdmin() {
+  document.getElementById('login-screen').classList.remove('visible');
+}
+function ocultarAdmin() {
+  document.getElementById('login-screen').classList.add('visible');
+  setTimeout(() => document.getElementById('login-email')?.focus(), 100);
+}
+
+onAuthStateChanged(auth, user => {
+  if (user) {
+    mostrarAdmin();
+    init();
+  } else {
+    ocultarAdmin();
+  }
+});
+
+window.verificarClave = async function() {
+  const email = document.getElementById('login-email').value.trim();
+  const pwd   = document.getElementById('login-pwd').value;
+  const error = document.getElementById('login-error');
+  const btn   = document.getElementById('login-btn');
+  if (!email || !pwd) { error.textContent = 'Ingresa tu correo y contraseña.'; return; }
+  btn.disabled = true;
+  btn.textContent = '⏳ Verificando…';
+  try {
+    await signInWithEmailAndPassword(auth, email, pwd);
+    error.textContent = '';
+  } catch(e) {
+    error.textContent = 'Correo o contraseña incorrectos.';
+    document.getElementById('login-pwd').value = '';
+    document.getElementById('login-pwd').classList.add('error');
+    setTimeout(() => document.getElementById('login-pwd').classList.remove('error'), 400);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔐 Ingresar';
+  }
+};
+
+window.cerrarSesion = async function() {
+  await signOut(auth);
+};
+
+// ─── ESTADO ───────────────────────────────────────────────────────────────────
 let tmpParadas = [];
 let _gps = {};
 
@@ -393,7 +457,10 @@ window.showTab = function(id) {
 };
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
+let _initDone = false;
 function init() {
+  if (_initDone) return;
+  _initDone = true;
   renderLinks();
   dbOnRutas(rutas     => { renderRutasAdmin(); updateStats(); });
   dbOnUnidades(unds   => { renderUnidadesAdmin(); updateStats(); });
@@ -404,7 +471,7 @@ function init() {
 function updateStats() {
   const rutas = dbGetRutas();
   document.getElementById('st-rutas').textContent   = Object.keys(rutas).length;
-  document.getElementById('st-paradas').textContent = Object.values(rutas).reduce((s,r)=>s+r.paradas.length,0);
+  document.getElementById('st-paradas').textContent = Object.values(rutas).reduce((s,r)=>s+(r.paradas?.length||0),0);
 }
 
 // ─── GPS VIVO ─────────────────────────────────────────────────────────────────
@@ -421,7 +488,6 @@ function refreshGPS() {
     const g = _gps[u.id], ruta = rutas[u.ruta];
     const isOk = g && (now - g.ts < 60000) && g.estado !== 'puntual';
     if (!isOk) {
-      // Mostrar última posición conocida aunque esté apagada
       const tieneUltima = g && g.lat && g.lng;
       const cuandoStr = g ? (() => {
         const mins = Math.round((now - g.ts) / 60000);
@@ -430,33 +496,25 @@ function refreshGPS() {
         if (mins < 60) return `hace ${mins} min`;
         if (horas < 24) return `hace ${horas}h`;
         return `hace ${dias} día${dias>1?'s':''}`;
-      })() : 'nunca';
-      const paradas = ruta?.paradas || [];
-      const stopIdx = g?.stopIdx || 0;
-      const ultimaParada = paradas[stopIdx]?.nombre || '—';
+      })() : 'Sin datos';
       return `
-        <div class="unit-live-card no-gps" style="opacity:1;">
+        <div class="unit-live-card no-gps">
           <div class="ulc-header">
             <div class="ulc-dot"></div>
-            <div style="flex:1;"><div class="ulc-name">${u.nombre}</div><div class="ulc-ruta">${ruta?.nombre||'—'} · ${u.placa}</div></div>
-            <span class="badge badge-inactive">Sin señal</span>
+            <div style="flex:1;"><div class="ulc-name">${u.nombre}</div><div class="ulc-ruta">${ruta?.nombre||'Sin ruta'}</div></div>
+            <span style="font-size:11px;color:var(--muted);">Apagada</span>
           </div>
+          <div style="font-size:12px;color:var(--muted);">Último reporte: ${cuandoStr}</div>
           ${tieneUltima ? `
-            <div style="font-size:11px;color:var(--accent);margin:8px 0 4px;font-weight:600;">📍 Última posición conocida · ${cuandoStr}</div>
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px;">📌 ${ultimaParada}</div>
-            <div style="font-family:monospace;font-size:11px;color:var(--muted);">${g.lat.toFixed(4)}° N, ${Math.abs(g.lng).toFixed(4)}° W</div>
-            <div style="display:flex;gap:8px;margin-top:10px;">
-              <button onclick="verMapaUnidad('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">🗺️ Ver última posición</button>
-              <button id="sol-btn-${u.id}" onclick="solicitarUbicacion('${u.id}')" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--blue);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">📍 Ver ahora</button>
-            </div>
-          ` : `
-            <div style="font-size:12px;color:var(--muted);text-align:center;padding:10px 0;">📡 Sin datos GPS registrados</div>
-            <button id="sol-btn-${u.id}" onclick="solicitarUbicacion('${u.id}')" style="width:100%;margin-top:6px;padding:8px;border-radius:8px;border:1px solid rgba(59,130,246,.3);background:rgba(59,130,246,.08);color:var(--blue);font-family:'Syne',sans-serif;font-size:12px;font-weight:700;cursor:pointer;">📍 Ver ubicación ahora</button>
-          `}
+          <button onclick="verMapaUnidad('${u.id}')" style="margin-top:8px;width:100%;padding:6px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:11px;cursor:pointer;">🗺️ Ver última posición</button>
+          <button id="sol-btn-${u.id}" onclick="solicitarUbicacion('${u.id}')" style="margin-top:6px;width:100%;padding:6px;border-radius:8px;border:1px solid rgba(249,115,22,.3);background:rgba(249,115,22,.08);color:var(--accent);font-size:11px;cursor:pointer;">📍 Solicitar ubicación ahora</button>
+          ` : ''}
         </div>`;
     }
-    const paradas=ruta?.paradas||[], stopIdx=g.stopIdx;
-    const pct = paradas.length>1 ? Math.round((stopIdx/(paradas.length-1))*100) : 0;
+    const paradas  = ruta?.paradas || [];
+    const stopIdx  = g.stopIdx || 0;
+    const stopNombre = paradas[stopIdx]?.nombre || `Parada ${stopIdx}`;
+    const pct      = paradas.length > 1 ? Math.round((stopIdx/(paradas.length-1))*100) : 0;
     const sinceStr = Math.round((now-g.ts)/60000)<1 ? 'ahora mismo' : `hace ${Math.round((now-g.ts)/60000)} min`;
     const stopsHtml = paradas.slice(0,6).map((p,i)=>`
       <div class="ulc-stop-item">
@@ -495,6 +553,165 @@ function renderConsultas(consultas) {
       <div style="background:rgba(59,130,246,.15);color:var(--blue);font-size:13px;font-weight:700;padding:4px 12px;border-radius:20px;">${items.length} persona${items.length>1?'s':''}</div>
     </div>`).join('');
 }
+
+// ─── MAPA ADMIN ───────────────────────────────────────────────────────────────
+let _adminMapa = null;
+let _adminMarkers = [];
+
+window.verMapaUnidad = function(unitId) {
+  const unidades = dbGetUnidades(), rutas = dbGetRutas(), now = Date.now();
+  const u = unidades[unitId], g = _gps[unitId];
+  if (!g || !g.lat) { alert('No hay posición disponible'); return; }
+  const ruta = u ? rutas[u.ruta] : null;
+  document.getElementById('modal-mapa-title').textContent = u?.nombre || unitId;
+  document.getElementById('modal-mapa-bg').classList.add('open');
+  setTimeout(() => {
+    if (!_adminMapa) {
+      _adminMapa = L.map('admin-mapa').setView([g.lat, g.lng], 14);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19 }).addTo(_adminMapa);
+    }
+    _adminMarkers.forEach(m => _adminMapa.removeLayer(m));
+    _adminMarkers = [];
+    const bounds = [];
+    if (ruta?.paradas) {
+      ruta.paradas.forEach((p,i) => {
+        const curStop = g.stopIdx || 0;
+        const color = i < curStop ? '#22c55e' : i === curStop ? '#f97316' : '#94a3b8';
+        const mP = L.circleMarker([p.lat, p.lng], { radius:7, fillColor:color, color:'white', weight:2, fillOpacity:1 })
+          .addTo(_adminMapa).bindPopup(`<b>${i+1}. ${p.nombre}</b>`);
+        _adminMarkers.push(mP);
+        bounds.push([p.lat, p.lng]);
+      });
+    }
+    const isActiva = now - g.ts < 60000;
+    const cuandoStr = (() => { const m=Math.round((now-g.ts)/60000); return m<1?'ahora':m<60?`hace ${m} min`:`hace ${Math.round(m/60)}h`; })();
+    const curStop = g.stopIdx || 0;
+    const mBus = L.marker([g.lat, g.lng], { icon: L.divIcon({ html:`<div style="background:${isActiva?'#f97316':'#475569'};width:32px;height:32px;border-radius:50%;border:3px solid white;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.3);">🚌</div>`, iconSize:[32,32], iconAnchor:[16,16], className:'' }) })
+      .addTo(_adminMapa).bindPopup(`<b>${isActiva?'🟢':'⚫'} ${u?.nombre||unitId}</b><br>Placa: ${u?.placa||'—'}<br>Parada: ${ruta?.paradas?.[curStop]?.nombre||curStop}<br><small style="color:#64748b;">${isActiva?'En ruta':'Apagada · '+cuandoStr}</small>`);
+    _adminMarkers.push(mBus);
+    bounds.push([g.lat, g.lng]);
+    if (!isActiva) mBus.openPopup();
+    if (bounds.length) _adminMapa.fitBounds(L.latLngBounds(bounds), { padding:[30,30], maxZoom:15 });
+    _adminMapa.invalidateSize();
+  }, 150);
+};
+
+window.cerrarMapaAdmin = function() {
+  document.getElementById('modal-mapa-bg').classList.remove('open');
+};
+
+// ─── SOLICITUD DE UBICACIÓN PUNTUAL ──────────────────────────────────────────
+const FIRESTORE_SOL = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
+const FIREBASE_SOL_KEY = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
+
+window.solicitarUbicacion = async function(unitId) {
+  const btn = document.getElementById('sol-btn-' + unitId) || event.target;
+  const textoOriginal = btn.textContent;
+  btn.textContent = '⏳ Solicitando…';
+  btn.disabled = true;
+  try {
+    const url  = FIRESTORE_SOL + '/solicitudes/' + unitId + '?key=' + FIREBASE_SOL_KEY;
+    const body = { fields: { solicitado:{booleanValue:true}, ts:{integerValue:String(Date.now())}, unitId:{stringValue:unitId} }};
+    await fetch(url, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    let intentos = 0;
+    const tsAntes = Date.now();
+    const esperar = setInterval(async () => {
+      intentos++;
+      try {
+        const r = await fetch(FIRESTORE_SOL + '/gps/' + unitId + '?key=' + FIREBASE_SOL_KEY);
+        if (r.ok) {
+          const data = await r.json();
+          const ts = parseInt(data?.fields?.ts?.integerValue || 0);
+          if (ts > tsAntes) {
+            clearInterval(esperar);
+            btn.textContent = '✅ Actualizado';
+            btn.disabled = false;
+            setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
+            refreshGPS();
+            setTimeout(() => verMapaUnidad(unitId), 500);
+            return;
+          }
+        }
+      } catch(e) {}
+      if (intentos >= 15) {
+        clearInterval(esperar);
+        btn.textContent = '❌ Sin respuesta';
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
+      }
+    }, 1000);
+  } catch(e) {
+    btn.textContent = '❌ Error';
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
+  }
+};
+
+// ─── ZONA DE EXCLUSIÓN ────────────────────────────────────────────────────────
+const FIRESTORE_REST_EXCL = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
+const FIREBASE_KEY_EXCL   = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
+
+let _mapaExcl    = null;
+let _markerExcl  = null;
+let _circuloExcl = null;
+let _exclData    = { lat: null, lng: null, radio: 150 };
+
+window.initMapaExclusion = function() {
+  if (_mapaExcl) { setTimeout(() => _mapaExcl.invalidateSize(), 100); return; }
+  const btnEl = document.getElementById('mapa-exclusion-btn');
+  const mapEl = document.getElementById('mapa-exclusion');
+  if (!mapEl) return;
+  if (btnEl) btnEl.style.display = 'none';
+  mapEl.style.cssText = 'display:block!important;height:280px!important;width:100%!important;';
+  _mapaExcl = L.map('mapa-exclusion', { center:[10.0,-84.12], zoom:14 });
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OSM' }).addTo(_mapaExcl);
+  setTimeout(() => _mapaExcl.invalidateSize(), 300);
+  fetch(FIRESTORE_REST_EXCL + '/config/exclusion?key=' + FIREBASE_KEY_EXCL)
+    .then(r => r.ok ? r.json() : null).then(data => {
+      if (!data?.fields) return;
+      const lat = data.fields.lat?.doubleValue, lng = data.fields.lng?.doubleValue;
+      const radio = parseInt(data.fields.radio?.integerValue || 150);
+      if (lat && lng) {
+        _exclData = { lat, lng, radio };
+        document.getElementById('radio-slider').value = radio;
+        window.actualizarRadio(radio);
+        _ponerMarcadorExcl(lat, lng);
+        _mapaExcl.setView([lat, lng], 15);
+      }
+    }).catch(()=>{});
+  _mapaExcl.on('click', e => _ponerMarcadorExcl(e.latlng.lat, e.latlng.lng));
+};
+
+function _ponerMarcadorExcl(lat, lng) {
+  _exclData.lat = lat; _exclData.lng = lng;
+  const radio = _exclData.radio || 150;
+  if (_markerExcl)  _mapaExcl.removeLayer(_markerExcl);
+  if (_circuloExcl) _mapaExcl.removeLayer(_circuloExcl);
+  _markerExcl = L.marker([lat,lng],{icon:L.divIcon({html:'<div style="background:#ef4444;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.4);"></div>',iconSize:[16,16],iconAnchor:[8,8],className:''})}).addTo(_mapaExcl).bindPopup('🏭 Plantel · Radio: '+radio+'m');
+  _circuloExcl = L.circle([lat,lng],{radius:radio,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.15,weight:2}).addTo(_mapaExcl);
+  document.getElementById('exclusion-coords').textContent = lat.toFixed(5)+'° N, '+Math.abs(lng).toFixed(5)+'° W';
+}
+
+window.actualizarRadio = function(val) {
+  const r = parseInt(val);
+  _exclData.radio = r;
+  document.getElementById('radio-display').textContent = r + ' metros';
+  if (_circuloExcl && _exclData.lat) {
+    _mapaExcl.removeLayer(_circuloExcl);
+    _circuloExcl = L.circle([_exclData.lat,_exclData.lng],{radius:r,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.15,weight:2}).addTo(_mapaExcl);
+  }
+};
+
+window.guardarExclusion = async function() {
+  if (!_exclData.lat) { alert('Haz clic en el mapa para colocar el plantel primero'); return; }
+  const st = document.getElementById('exclusion-status');
+  st.textContent='⏳ Guardando…'; st.style.color='var(--muted)';
+  try {
+    const r = await fetch(FIRESTORE_REST_EXCL+'/config/exclusion?key='+FIREBASE_KEY_EXCL,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{lat:{doubleValue:_exclData.lat},lng:{doubleValue:_exclData.lng},radio:{integerValue:String(_exclData.radio)},activo:{booleanValue:true}}})});
+    st.textContent = r.ok ? '✅ Zona guardada' : '❌ Error al guardar';
+    st.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+  } catch(e) { st.textContent='❌ '+e.message; st.style.color='var(--red)'; }
+};
 
 // ─── RUTAS ────────────────────────────────────────────────────────────────────
 function renderRutasAdmin() {
@@ -548,6 +765,7 @@ window.abrirModalRuta = function(id=null) {
   renderParadasModal();
   abrirModal('modal-ruta');
 };
+
 window.eliminarRuta = async function(id) {
   if (!confirm('¿Eliminar esta ruta?')) return;
   await dbDeleteRuta(id);
@@ -580,7 +798,6 @@ window.guardarRuta = async function() {
   if(!nombre){alert('El nombre es requerido');return;}
   const turnosDisp = ['6am','2pm','6pm','10pm'];
   const horarios = turnosDisp.filter(h=>document.getElementById('hor-'+h).checked);
-  // Ventanas de consulta GPS por turno
   const ventanas = {};
   turnosDisp.forEach(h => {
     const ini = document.getElementById('hor-'+h+'-ini')?.value || '';
@@ -672,7 +889,6 @@ window.eliminarUnidad = async function(id) {
 function renderLinks() {
   const base=window.location.href.replace(/[^\/]*$/,'');
   document.getElementById('url-emp').textContent   = base+'colaboradores.html';
-  
   document.getElementById('url-admin').textContent = base+'admin.html';
 }
 window.copyLink = function(id) {
@@ -703,15 +919,12 @@ window.importarConfig = async function(e) {
 window.abrirModal  = id => document.getElementById(id).classList.add('open');
 window.cerrarModal = id => document.getElementById(id).classList.remove('open');
 
-init();
-// Refrescar display de GPS cada 60 segundos para actualizar "hace X min"
+// Refrescar display de GPS cada 30 segundos para actualizar "hace X min"
 setInterval(() => { if (Object.keys(_gps).length) refreshGPS(); }, 30000);
 
-// ─── CONSULTA MANUAL (una sola petición al API sin importar horario) ──────────
+// ─── CONSULTA MANUAL ──────────────────────────────────────────────────────────
 const TENANT_ID_ADM = '742';
 const APP_ID_ADM    = '10001';
-
-// IDs de Powerfleet por unitId
 const POWERFLEET_IDS = {
   'U01': '4273350242566909952',
   'U02': '4273350389036195840',
@@ -719,359 +932,41 @@ const POWERFLEET_IDS = {
 const _gpsIndexAdm = {};
 
 window.consultaManual = async function(unitId) {
-  // Leer token de Firebase (sincronizado por la extensión)
   let token = '';
   try {
     const r = await fetch('https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents/bridge/token?key=AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM');
-    if (r.ok) {
-      const data = await r.json();
-      token = data?.fields?.token?.stringValue || '';
-    }
+    if (r.ok) { const data = await r.json(); token = data?.fields?.token?.stringValue || ''; }
   } catch(e) {}
-
   if (!token) { alert('No hay token disponible. Asegúrate de que el bridge o la extensión estén activos.'); return; }
-
   const vid = POWERFLEET_IDS[unitId];
   if (!vid) { alert('Unidad no reconocida: ' + unitId); return; }
-
-  const unidades = dbGetUnidades();
-  const rutas    = dbGetRutas();
-  const u        = unidades[unitId];
-  const ruta     = u ? rutas[u.ruta] : null;
-
-  // Mostrar estado de carga en el botón
+  const unidades = dbGetUnidades(), rutas = dbGetRutas();
+  const u = unidades[unitId], ruta = u ? rutas[u.ruta] : null;
   const btns = document.querySelectorAll(`[onclick="consultaManual('${unitId}')"]`);
   btns.forEach(b => { b.textContent = '⏳ Consultando…'; b.disabled = true; });
-
   try {
     const reqId = 'bt' + Math.random().toString(36).slice(2,8);
     const gpsIdx = _gpsIndexAdm[vid] || '0';
     const url = `https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment?gpsIndex=${gpsIdx}&reqId=${reqId}&vehicleId=${vid}`;
-
-    const r = await fetch(url, {
-      method: 'GET',
-      headers: { '_token': token, '_tenantid': TENANT_ID_ADM, '_appid': APP_ID_ADM, '_langtype': 'es_ES', 'Accept': 'application/json, text/plain, */*' }
-    });
-
+    const r = await fetch(url, { method:'GET', headers:{ '_token':token, '_tenantid':TENANT_ID_ADM, '_appid':APP_ID_ADM, '_langtype':'es_ES', 'Accept':'application/json, text/plain, */*' } });
     if (!r.ok) { alert('Error al consultar: HTTP ' + r.status); return; }
-
     const json = await r.json();
     if (!json.success || !json.data) { alert('Sin datos del API'); return; }
     if (json.data.gpsIndex) _gpsIndexAdm[vid] = json.data.gpsIndex;
-
     const lista = (json.data.gpsList || []).filter(i => String(i.vid) === String(vid));
     if (!lista.length) { alert('La unidad no reportó ubicación'); return; }
-
     const item = lista[lista.length - 1];
     const lat  = item.lat / 1000000;
     const lng  = item.lng / 1000000;
-
     if (lat < 8 || lat > 11 || lng < -86 || lng > -82) { alert('Coordenadas fuera de Costa Rica'); return; }
-
-    // Mostrar en el mapa admin
-    const nombre = u?.nombre || unitId;
-    const placa  = u?.placa  || '';
-    document.getElementById('modal-mapa-title').textContent = nombre + ' · ' + (ruta?.nombre || '') + ' · Consulta manual';
-    document.getElementById('modal-mapa-bg').classList.add('open');
-
-    setTimeout(() => {
-      if (!_adminMapa) {
-        _adminMapa = L.map('admin-mapa', { zoomControl:true, attributionControl:true });
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(_adminMapa);
-      }
-      _adminMarkers.forEach(m => _adminMapa.removeLayer(m));
-      _adminMarkers = [];
-
-      // Marcador de la unidad
-      const mBus = L.marker([lat, lng], {
-        icon: L.divIcon({ html:`<div style="background:#f97316;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);">🚌</div>`, iconSize:[36,36], iconAnchor:[18,18], className:'' }),
-        zIndexOffset:1000
-      }).addTo(_adminMapa).bindPopup(`<b>🚌 ${nombre}</b><br>Placa: ${placa}<br>${lat.toFixed(5)}° N, ${Math.abs(lng).toFixed(5)}° W<br><small>Consulta manual</small>`);
-      mBus.openPopup();
-      _adminMarkers.push(mBus);
-
-      // Paradas de la ruta
-      if (ruta?.paradas?.length) {
-        ruta.paradas.forEach((p, i) => {
-          const m = L.marker([p.lat, p.lng], {
-            icon: L.divIcon({ html:`<div style="background:#22c55e;width:10px;height:10px;border-radius:50%;border:2px solid white;"></div>`, iconSize:[10,10], iconAnchor:[5,5], className:'' })
-          }).addTo(_adminMapa).bindPopup(`<b>${p.nombre}</b><br><small>${p.detalle}</small>`);
-          _adminMarkers.push(m);
-        });
-      }
-
-      const bounds = [[lat, lng]];
-      if (ruta?.paradas?.length) ruta.paradas.forEach(p => bounds.push([p.lat, p.lng]));
-      _adminMapa.fitBounds(L.latLngBounds(bounds), { padding:[30,30], maxZoom:15 });
-      _adminMapa.invalidateSize();
-    }, 150);
-
+    btns.forEach(b => { b.textContent = '✅ Actualizado'; b.disabled = false; });
+    setTimeout(() => btns.forEach(b => b.textContent = '📍 Consultar ahora'), 2000);
   } catch(e) {
-    alert('Error: ' + e.message);
-  } finally {
-    btns.forEach(b => { b.textContent = '📍 Ver ubicación actual'; b.disabled = false; });
+    btns.forEach(b => { b.textContent = '❌ Error'; b.disabled = false; });
+    setTimeout(() => btns.forEach(b => b.textContent = '📍 Consultar ahora'), 2000);
   }
 };
 
-// ─── MAPA ADMIN ──────────────────────────────────────────────────────────────
-let _adminMapa = null;
-let _adminMarkers = [];
-
-function iconBusAdmin() {
-  return L.divIcon({
-    html:`<div style="background:#f97316;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);">🚌</div>`,
-    iconSize:[36,36], iconAnchor:[18,18], className:''
-  });
-}
-
-function iconStopAdmin(pasada) {
-  const color = pasada ? '#374151' : '#22c55e';
-  const size  = pasada ? 8 : 10;
-  return L.divIcon({
-    html:`<div style="background:${color};width:${size}px;height:${size}px;border-radius:50%;border:2px solid white;opacity:${pasada?'.5':'1'};"></div>`,
-    iconSize:[size,size], iconAnchor:[size/2,size/2], className:''
-  });
-}
-
-window.verMapaUnidad = function(unitId) {
-  const u    = dbGetUnidades()[unitId];
-  const g    = _gps[unitId];
-  const ruta = g ? dbGetRutas()[g.ruta] : (u ? dbGetRutas()[u.ruta] : null);
-  if (!ruta && !g) return;
-  const now = Date.now();
-  const isActiva = g && (now - g.ts < 60000);
-  const tienePos = g && g.lat && g.lng;
-
-  const estadoStr = isActiva ? '' : tienePos ? ' · Última posición conocida' : '';
-  document.getElementById('modal-mapa-title').textContent = (u?.nombre || unitId) + ' · ' + (ruta?.nombre || '') + estadoStr;
-  document.getElementById('modal-mapa-bg').classList.add('open');
-
-  setTimeout(() => {
-    // Inicializar mapa si es primera vez
-    if (!_adminMapa) {
-      _adminMapa = L.map('admin-mapa', { zoomControl:true, attributionControl:true });
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom:19, attribution:'© OpenStreetMap'
-      }).addTo(_adminMapa);
-    }
-
-    // Limpiar marcadores anteriores
-    _adminMarkers.forEach(m => _adminMapa.removeLayer(m));
-    _adminMarkers = [];
-
-    const bounds = [];
-    const curStop = g?.stopIdx ?? 0;
-
-    // Paradas
-    if (ruta?.paradas?.length) {
-      ruta.paradas.forEach((p, i) => {
-        const pasada = i < curStop;
-        const actual = i === curStop;
-        const m = L.marker([p.lat, p.lng], { icon: iconStopAdmin(pasada) })
-          .addTo(_adminMapa)
-          .bindPopup(`<b>${actual ? '📍 ' : pasada ? '✓ ' : ''}${p.nombre}</b><br><small>${p.detalle}</small>`);
-        _adminMarkers.push(m);
-        bounds.push([p.lat, p.lng]);
-        if (actual) m.openPopup();
-      });
-    }
-
-    // Marcador de la unidad (activa o última posición conocida)
-    if (tienePos) {
-      const mins = Math.round((now - g.ts) / 60000);
-      const cuandoStr = mins < 1 ? 'ahora mismo' : mins < 60 ? `hace ${mins} min` : `hace ${Math.round(mins/60)}h`;
-      const iconUsar = isActiva ? iconBusAdmin() : L.divIcon({
-        html: `<div style="background:#64748b;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.5);opacity:.7;">🚌</div>`,
-        iconSize:[36,36], iconAnchor:[18,18], className:''
-      });
-      const mBus = L.marker([g.lat, g.lng], { icon: iconUsar, zIndexOffset:1000 })
-        .addTo(_adminMapa)
-        .bindPopup(`<b>${isActiva ? '🚌' : '⚫'} ${u?.nombre || unitId}</b><br>Placa: ${u?.placa || '—'}<br>Parada: ${ruta?.paradas?.[curStop]?.nombre || curStop}<br><small style="color:#64748b;">${isActiva ? 'En ruta' : 'Apagada · ' + cuandoStr}</small>`);
-      _adminMarkers.push(mBus);
-      bounds.push([g.lat, g.lng]);
-      if (!isActiva) mBus.openPopup();
-    }
-
-    // Zoom
-    if (bounds.length) {
-      _adminMapa.fitBounds(L.latLngBounds(bounds), { padding:[30,30], maxZoom:15 });
-    }
-    _adminMapa.invalidateSize();
-  }, 150);
-};
-
-
-// ─── SOLICITUD DE UBICACIÓN PUNTUAL ──────────────────────────────────────────
-const FIRESTORE_SOL = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
-const FIREBASE_SOL_KEY = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
-
-window.solicitarUbicacion = async function(unitId) {
-  const btn = document.getElementById('sol-btn-' + unitId) || event.target;
-  const textoOriginal = btn.textContent;
-  btn.textContent = '⏳ Solicitando…';
-  btn.disabled = true;
-
-  try {
-    // Escribir solicitud en Firebase
-    const url  = FIRESTORE_SOL + '/solicitudes/' + unitId + '?key=' + FIREBASE_SOL_KEY;
-    const body = { fields: {
-      solicitado: { booleanValue: true },
-      ts:         { integerValue: String(Date.now()) },
-      unitId:     { stringValue: unitId }
-    }};
-    await fetch(url, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
-
-    // Esperar respuesta — el bridge la procesa y borra la solicitud
-    // Monitorear el doc de GPS de esta unidad por cambios
-    let intentos = 0;
-    const tsAntes = Date.now();
-    const esperar = setInterval(async () => {
-      intentos++;
-      try {
-        const r = await fetch(FIRESTORE_SOL + '/gps/' + unitId + '?key=' + FIREBASE_SOL_KEY);
-        if (r.ok) {
-          const data = await r.json();
-          const ts = parseInt(data?.fields?.ts?.integerValue || 0);
-          if (ts > tsAntes) {
-            clearInterval(esperar);
-            btn.textContent = '✅ Actualizado';
-            btn.disabled = false;
-            setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
-            // Refrescar el GPS y abrir el mapa con la nueva posición
-            refreshGPS();
-            setTimeout(() => verMapaUnidad(unitId), 500);
-            return;
-          }
-        }
-      } catch(e) {}
-      if (intentos >= 15) { // timeout 15s
-        clearInterval(esperar);
-        btn.textContent = '❌ Sin respuesta';
-        btn.disabled = false;
-        setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
-      }
-    }, 1000);
-
-  } catch(e) {
-    btn.textContent = '❌ Error';
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent = textoOriginal; }, 2000);
-  }
-};
-
-window.cerrarMapaAdmin = function() {
-  document.getElementById('modal-mapa-bg').classList.remove('open');
-};
-
-// ─── ZONA DE EXCLUSIÓN ────────────────────────────────────────────────────────
-const FIRESTORE_REST_EXCL = 'https://firestore.googleapis.com/v1/projects/busetatrack/databases/(default)/documents';
-const FIREBASE_KEY_EXCL   = 'AIzaSyCKMIoHaMgeyVhksXFRYS0eONEJgmj0WUM';
-
-let _mapaExcl    = null;
-let _markerExcl  = null;
-let _circuloExcl = null;
-let _exclData    = { lat: null, lng: null, radio: 150 };
-
-window.initMapaExclusion = function() {
-  if (_mapaExcl) { setTimeout(() => _mapaExcl.invalidateSize(), 100); return; }
-  const btnEl = document.getElementById('mapa-exclusion-btn');
-  const mapEl = document.getElementById('mapa-exclusion');
-  if (!mapEl) return;
-  if (btnEl) btnEl.style.display = 'none';
-  mapEl.style.cssText = 'display:block!important;height:280px!important;width:100%!important;';
-  _mapaExcl = L.map('mapa-exclusion', { center:[10.0,-84.12], zoom:14 });
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OSM' }).addTo(_mapaExcl);
-  setTimeout(() => _mapaExcl.invalidateSize(), 300);
-  fetch(FIRESTORE_REST_EXCL + '/config/exclusion?key=' + FIREBASE_KEY_EXCL)
-    .then(r => r.ok ? r.json() : null).then(data => {
-      if (!data?.fields) return;
-      const lat = data.fields.lat?.doubleValue, lng = data.fields.lng?.doubleValue;
-      const radio = parseInt(data.fields.radio?.integerValue || 150);
-      if (lat && lng) {
-        _exclData = { lat, lng, radio };
-        document.getElementById('radio-slider').value = radio;
-        window.actualizarRadio(radio);
-        _ponerMarcadorExcl(lat, lng);
-        _mapaExcl.setView([lat, lng], 15);
-      }
-    }).catch(()=>{});
-  _mapaExcl.on('click', e => _ponerMarcadorExcl(e.latlng.lat, e.latlng.lng));
-};
-
-function _ponerMarcadorExcl(lat, lng) {
-  _exclData.lat = lat; _exclData.lng = lng;
-  const radio = _exclData.radio || 150;
-  if (_markerExcl)  _mapaExcl.removeLayer(_markerExcl);
-  if (_circuloExcl) _mapaExcl.removeLayer(_circuloExcl);
-  _markerExcl = L.marker([lat,lng],{icon:L.divIcon({html:'<div style="background:#ef4444;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.4);"></div>',iconSize:[16,16],iconAnchor:[8,8],className:''})}).addTo(_mapaExcl).bindPopup('🏭 Plantel · Radio: '+radio+'m');
-  _circuloExcl = L.circle([lat,lng],{radius:radio,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.15,weight:2}).addTo(_mapaExcl);
-  document.getElementById('exclusion-coords').textContent = lat.toFixed(5)+'° N, '+Math.abs(lng).toFixed(5)+'° W';
-}
-
-window.actualizarRadio = function(val) {
-  const r = parseInt(val);
-  _exclData.radio = r;
-  document.getElementById('radio-display').textContent = r + ' metros';
-  if (_circuloExcl && _exclData.lat) {
-    _mapaExcl.removeLayer(_circuloExcl);
-    _circuloExcl = L.circle([_exclData.lat,_exclData.lng],{radius:r,color:'#ef4444',fillColor:'#ef4444',fillOpacity:.15,weight:2}).addTo(_mapaExcl);
-  }
-};
-
-window.guardarExclusion = async function() {
-  if (!_exclData.lat) { alert('Haz clic en el mapa para colocar el plantel primero'); return; }
-  const st = document.getElementById('exclusion-status');
-  st.textContent='⏳ Guardando…'; st.style.color='var(--muted)';
-  try {
-    const r = await fetch(FIRESTORE_REST_EXCL+'/config/exclusion?key='+FIREBASE_KEY_EXCL,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:{lat:{doubleValue:_exclData.lat},lng:{doubleValue:_exclData.lng},radio:{integerValue:String(_exclData.radio)},activo:{booleanValue:true}}})});
-    st.textContent = r.ok ? '✅ Zona guardada' : '❌ Error al guardar';
-    st.style.color = r.ok ? 'var(--green)' : 'var(--red)';
-  } catch(e) { st.textContent='❌ '+e.message; st.style.color='var(--red)'; }
-};
-
-</script>
-
-<script>
-(function() {
-  const CLAVE    = '1252';
-  const TTL_MS   = 24 * 60 * 60 * 1000; // 24 horas
-
-  function sesionValida() {
-    const ts = localStorage.getItem('bt_admin_ts');
-    return ts && (Date.now() - parseInt(ts)) < TTL_MS;
-  }
-
-  function mostrarAdmin() {
-    document.getElementById('login-screen').classList.remove('visible');
-  }
-
-  function ocultarAdmin() {
-    document.getElementById('login-screen').classList.add('visible');
-    setTimeout(() => document.getElementById('login-pwd')?.focus(), 100);
-  }
-
-  window.verificarClave = function() {
-    const input = document.getElementById('login-pwd');
-    const error = document.getElementById('login-error');
-    if (input.value === CLAVE) {
-      localStorage.setItem('bt_admin_ts', Date.now().toString());
-      error.textContent = '';
-      mostrarAdmin();
-    } else {
-      input.classList.add('error');
-      error.textContent = 'Clave incorrecta. Intenta de nuevo.';
-      input.value = '';
-      setTimeout(() => input.classList.remove('error'), 400);
-    }
-  };
-
-  // Verificar al cargar
-  if (sesionValida()) {
-    mostrarAdmin();
-  } else {
-    ocultarAdmin();
-  }
-})();
 </script>
 
 <!-- MODAL MAPA ADMIN -->
