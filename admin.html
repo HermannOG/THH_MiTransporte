@@ -381,7 +381,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut }
+import { getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { dbGetRutas, dbGetRuta, dbSaveRuta, dbDeleteRuta,
          dbGetUnidades, dbSaveUnidad, dbDeleteUnidad,
@@ -408,25 +408,7 @@ function ocultarAdmin() {
   setTimeout(() => document.getElementById('login-email')?.focus(), 100);
 }
 
-// Esperar resultado del redirect de Google antes de evaluar estado de auth
-let _redirectChecked = false;
-
-getRedirectResult(auth).then(result => {
-  _redirectChecked = true;
-  if (result?.user) {
-    mostrarAdmin();
-    init();
-  }
-}).catch(e => {
-  _redirectChecked = true;
-  if (e.code && e.code !== 'auth/null-user') {
-    const el = document.getElementById('login-error');
-    if (el) el.textContent = 'Error al iniciar con Google.';
-  }
-});
-
 onAuthStateChanged(auth, user => {
-  if (!_redirectChecked) return; // esperar que getRedirectResult termine primero
   if (user) {
     mostrarAdmin();
     init();
@@ -465,12 +447,17 @@ window.loginConGoogle = async function() {
   const btn   = document.getElementById('google-btn');
   const error = document.getElementById('login-error');
   btn.disabled = true;
-  btn.innerHTML = '⏳ Redirigiendo…';
+  btn.innerHTML = '⏳ Abriendo Google…';
+  error.textContent = '';
   try {
     const provider = new GoogleAuthProvider();
-    await signInWithRedirect(auth, provider);
+    provider.setCustomParameters({ prompt: 'select_account' });
+    await signInWithPopup(auth, provider);
   } catch(e) {
-    error.textContent = 'Error al iniciar con Google. Intenta de nuevo.';
+    if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+      error.textContent = 'Error: ' + (e.message || e.code);
+    }
+  } finally {
     btn.disabled = false;
     btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" height="18"> Continuar con Google';
   }
