@@ -408,7 +408,25 @@ function ocultarAdmin() {
   setTimeout(() => document.getElementById('login-email')?.focus(), 100);
 }
 
+// Esperar resultado del redirect de Google antes de evaluar estado de auth
+let _redirectChecked = false;
+
+getRedirectResult(auth).then(result => {
+  _redirectChecked = true;
+  if (result?.user) {
+    mostrarAdmin();
+    init();
+  }
+}).catch(e => {
+  _redirectChecked = true;
+  if (e.code && e.code !== 'auth/null-user') {
+    const el = document.getElementById('login-error');
+    if (el) el.textContent = 'Error al iniciar con Google.';
+  }
+});
+
 onAuthStateChanged(auth, user => {
+  if (!_redirectChecked) return; // esperar que getRedirectResult termine primero
   if (user) {
     mostrarAdmin();
     init();
@@ -458,14 +476,7 @@ window.loginConGoogle = async function() {
   }
 };
 
-getRedirectResult(auth).then(result => {
-  if (result?.user) { mostrarAdmin(); init(); }
-}).catch(e => {
-  if (e.code && e.code !== 'auth/null-user') {
-    const el = document.getElementById('login-error');
-    if (el) el.textContent = 'Error al iniciar con Google.';
-  }
-});
+
 
 // ─── ESTADO ───────────────────────────────────────────────────────────────────
 let tmpParadas = [];
