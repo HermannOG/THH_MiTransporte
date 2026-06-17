@@ -408,10 +408,23 @@ function ocultarAdmin() {
   setTimeout(() => document.getElementById('login-email')?.focus(), 100);
 }
 
-onAuthStateChanged(auth, user => {
+// ─── CORREOS AUTORIZADOS ─────────────────────────────────────────────────────
+const ADMINS_PERMITIDOS = [
+  'hermanhidalgoa@gmail.com',
+  'thh.50@hotmail.com',
+];
+
+onAuthStateChanged(auth, async user => {
   if (user) {
-    mostrarAdmin();
-    init();
+    if (ADMINS_PERMITIDOS.includes(user.email)) {
+      mostrarAdmin();
+      init();
+    } else {
+      await signOut(auth);
+      const error = document.getElementById('login-error');
+      if (error) error.textContent = 'Tu cuenta no tiene acceso al panel admin.';
+      ocultarAdmin();
+    }
   } else {
     ocultarAdmin();
   }
