@@ -381,7 +381,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut }
+import { getAuth, signInWithEmailAndPassword, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { dbGetRutas, dbGetRuta, dbSaveRuta, dbDeleteRuta,
          dbGetUnidades, dbSaveUnidad, dbDeleteUnidad,
@@ -447,22 +447,25 @@ window.loginConGoogle = async function() {
   const btn   = document.getElementById('google-btn');
   const error = document.getElementById('login-error');
   btn.disabled = true;
-  btn.textContent = '⏳ Conectando…';
+  btn.innerHTML = '⏳ Redirigiendo…';
   try {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
-    error.textContent = '';
+    await signInWithRedirect(auth, provider);
   } catch(e) {
-    if (e.code === 'auth/popup-closed-by-user') {
-      error.textContent = '';
-    } else {
-      error.textContent = 'Error al iniciar con Google. Intenta de nuevo.';
-    }
-  } finally {
+    error.textContent = 'Error al iniciar con Google. Intenta de nuevo.';
     btn.disabled = false;
     btn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" height="18"> Continuar con Google';
   }
 };
+
+getRedirectResult(auth).then(result => {
+  if (result?.user) { mostrarAdmin(); init(); }
+}).catch(e => {
+  if (e.code && e.code !== 'auth/null-user') {
+    const el = document.getElementById('login-error');
+    if (el) el.textContent = 'Error al iniciar con Google.';
+  }
+});
 
 // ─── ESTADO ───────────────────────────────────────────────────────────────────
 let tmpParadas = [];
