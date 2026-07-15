@@ -345,6 +345,20 @@ async function sincronizarTokenExtension() {
 
 setInterval(sincronizarTokenExtension, 2 * 60 * 1000);
 
+// ─── UNIDADES DE FIREBASE (para respetar activa/inactiva) ────────────────────
+let _unidadesCache = {};
+onSnapshot(collection(db, 'unidades'), snap => {
+  _unidadesCache = {};
+  snap.forEach(d => _unidadesCache[d.id] = d.data());
+});
+
+function unidadEstaActiva(unitId) {
+  const u = _unidadesCache[unitId];
+  // Si aún no ha llegado el dato de Firebase, asumimos activa para no bloquear al inicio
+  if (!u) return true;
+  return u.activa !== false;
+}
+
 // ─── RUTAS DE FIREBASE ────────────────────────────────────────────────────────
 onSnapshot(collection(db, 'rutas'), snap => {
   _rutasCache = {};
@@ -419,6 +433,11 @@ const _gpsIndex = {};
 
 // ─── CONSULTAR VEHÍCULO ───────────────────────────────────────────────────────
 async function consultarVehiculo(vid, vehic, token, forzar=false) {
+  // Si la unidad está inactiva en Firebase, no consultar el API (ahorra llamadas)
+  if (!unidadEstaActiva(vehic.unitId)) {
+    log(vehic.placa + ': unidad inactiva — sin consulta', 'info');
+    return;
+  }
   // Verificar si esta ruta específica tiene un turno activo
   // Si forzar=true (solicitud desde Admin), saltarse la verificación de horario
   const horariosActivos = document.getElementById('toggle-horarios')?.checked !== false;
