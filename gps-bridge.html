@@ -122,6 +122,22 @@
   <div class="ts"        id="ts-63">—</div>
 </div>
 
+<!-- Unidad 45 (HB2945) -->
+<div class="unit-card">
+  <div class="unit-head">
+    <div class="dot" id="dot-45"></div>
+    <div style="flex:1;">
+      <div class="unit-name">HB2945</div>
+      <div class="unit-sub" id="ruta-45">Cargando ruta…</div>
+    </div>
+    <button class="reset-btn" onclick="resetUnidad('45','U03')">🔄 Reset</button>
+  </div>
+  <div class="unit-stop" id="stop-45">📍 —</div>
+  <div class="unit-dist" id="dist-45"></div>
+  <div class="coords"    id="coords-45">Esperando GPS…</div>
+  <div class="ts"        id="ts-45">—</div>
+</div>
+
 <div class="debug-box" id="debug-box" style="display:none;">
   <h4>🔍 Debug — Paradas cargadas</h4>
   <div id="debug-content"></div>
@@ -157,8 +173,9 @@ const APP_ID    = '10001';
 const INTERVALO = 10000;
 
 const VEHICULOS = {
-  '4273350242566909952': { sufijo:'62', unitId:'U01', rutaId:'E8KI0P'     },
-  '4273350389036195840': { sufijo:'63', unitId:'U02', rutaId:'san-rafael' },
+  '4273350242566909952': { sufijo:'62', unitId:'U01', rutaId:'E8KI0P',     placa:'HB4262' },
+  '4273350389036195840': { sufijo:'63', unitId:'U02', rutaId:'san-rafael', placa:'HB4263' },
+  '4272233718166827008': { sufijo:'45', unitId:'U03', rutaId:'CAMBIAR_RUTA_ID', placa:'HB2945' },
 };
 
 // ─── HORARIOS DE CONSULTA (se leen de Firebase por ruta) ──────────────────────
@@ -293,7 +310,7 @@ function verificarCambioTurno() {
 
 let _iv         = null;
 let _rutasCache = {};
-const _stopActual = { U01: 0, U02: 0 };
+const _stopActual = { U01: 0, U02: 0, U03: 0 };
 let _gpsLimpiado = false; // para no borrar Firebase en cada ciclo
 
 // ─── LEER TOKEN DE FIREBASE ───────────────────────────────────────────────────
@@ -406,7 +423,7 @@ async function consultarVehiculo(vid, vehic, token, forzar=false) {
   // Si forzar=true (solicitud desde Admin), saltarse la verificación de horario
   const horariosActivos = document.getElementById('toggle-horarios')?.checked !== false;
   if (!forzar && horariosActivos && !turnoActivoParaRuta(vehic.rutaId)) {
-    log('HB42' + vehic.sufijo + ': fuera de horario para esta ruta', 'info');
+    log(vehic.placa + ': fuera de horario para esta ruta', 'info');
     return;
   }
   const url = 'https://us.visionai.unityaiot.com/gateway/base-gps-service/api/v1/gps/last/increment?gpsIndex=' + (_gpsIndex[vid]||'0') + '&reqId=' + reqId() + '&vehicleId=' + vid;
@@ -416,7 +433,7 @@ async function consultarVehiculo(vid, vehic, token, forzar=false) {
       headers:{ '_token':token, '_tenantid':TENANT_ID, '_appid':APP_ID, '_langtype':'es_ES', 'Accept':'application/json, text/plain, */*' }
     });
     if (!r.ok) {
-      log('HB42' + vehic.sufijo + ': HTTP ' + r.status, 'err');
+      log(vehic.placa + ': HTTP ' + r.status, 'err');
       if (r.status===401||r.status===403) { log('Token expirado, renovando…','info'); await renovarToken(); }
       return;
     }
@@ -424,10 +441,10 @@ async function consultarVehiculo(vid, vehic, token, forzar=false) {
     if (!json.success||!json.data) return;
     if (json.data.gpsIndex) _gpsIndex[vid] = json.data.gpsIndex;
     const lista = (json.data.gpsList||[]).filter(i=>String(i.vid)===String(vid));
-    if (!lista.length) { log('HB42'+vehic.sufijo+': sin cambios','info'); return; }
+    if (!lista.length) { log(vehic.placa+': sin cambios','info'); return; }
     const item = lista[lista.length-1];
     const lat  = item.lat/1000000, lng = item.lng/1000000;
-    if (lat<8||lat>11||lng<-86||lng>-82) { log('HB42'+vehic.sufijo+': coords fuera de CR','err'); document.getElementById('dot-'+vehic.sufijo).className='dot err'; return; }
+    if (lat<8||lat>11||lng<-86||lng>-82) { log(vehic.placa+': coords fuera de CR','err'); document.getElementById('dot-'+vehic.sufijo).className='dot err'; return; }
     const ruta = _rutasCache[vehic.rutaId];
     let stopIdx = _stopActual[vehic.unitId]||0, stopNombre='—', distStr='';
     if (ruta&&ruta.paradas&&ruta.paradas.length>0) {
@@ -437,15 +454,15 @@ async function consultarVehiculo(vid, vehic, token, forzar=false) {
       distStr = res.distMetros<1000 ? res.distMetros+' m de "'+stopNombre+'"' : (res.distMetros/1000).toFixed(1)+' km de "'+stopNombre+'"';
       document.getElementById('dist-'+vehic.sufijo).textContent = '📏 ' + distStr;
     } else {
-      log('HB42'+vehic.sufijo+': rutaId "'+vehic.rutaId+'" no encontrado. IDs: '+Object.keys(_rutasCache).join(', '),'err');
+      log(vehic.placa+': rutaId "'+vehic.rutaId+'" no encontrado. IDs: '+Object.keys(_rutasCache).join(', '),'err');
     }
     await setDoc(doc(db,'gps',vehic.unitId), { lat,lng,stopIdx,estado:'activo',ruta:vehic.rutaId,turno:turnoLabel(),fuente:'powerfleet',ts:Date.now() });
     document.getElementById('dot-'+vehic.sufijo).className = 'dot ok';
     document.getElementById('stop-'+vehic.sufijo).textContent = '📍 Parada '+stopIdx+': '+stopNombre;
     document.getElementById('coords-'+vehic.sufijo).textContent = lat.toFixed(5)+'° N, '+Math.abs(lng).toFixed(5)+'° W';
     document.getElementById('ts-'+vehic.sufijo).textContent = 'Actualizado: '+new Date().toLocaleTimeString('es-CR');
-    log('HB42'+vehic.sufijo+': stop='+stopIdx+' "'+stopNombre+'" | '+distStr,'ok');
-  } catch(e) { log('HB42'+vehic.sufijo+': '+e.message,'err'); }
+    log(vehic.placa+': stop='+stopIdx+' "'+stopNombre+'" | '+distStr,'ok');
+  } catch(e) { log(vehic.placa+': '+e.message,'err'); }
 }
 
 // ─── AUTO-LOGIN ───────────────────────────────────────────────────────────────
@@ -533,7 +550,7 @@ window.detener = async function() {
   document.getElementById('btn-stop').style.display='none';
   document.getElementById('badge').textContent='Inactivo'; document.getElementById('badge').className='badge';
   document.getElementById('header-estado').textContent='Powerfleet → Firebase';
-  ['62','63'].forEach(s=>{document.getElementById('dot-'+s).className='dot';document.getElementById('stop-'+s).textContent='📍 —';document.getElementById('dist-'+s).textContent='';});
+  ['62','63','45'].forEach(s=>{document.getElementById('dot-'+s).className='dot';document.getElementById('stop-'+s).textContent='📍 —';document.getElementById('dist-'+s).textContent='';});
   log('Bridge detenido','info');
 };
 
